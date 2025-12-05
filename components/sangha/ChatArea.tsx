@@ -1,0 +1,529 @@
+'use client'
+
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useDm } from '@/hooks/useDm'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Phone, Video, Info, PlusCircle, Smile, Gift, Sticker, Trash2, MoreVertical, X, Image as ImageIcon, FileText, Paperclip, Copy } from 'lucide-react'
+import EmojiPicker, { Theme } from 'emoji-picker-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { toast } from 'react-hot-toast'
+import { GifPicker } from '@/components/sangha/GifPicker'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Button } from '@/components/ui/button'
+import { Linkify } from '@/components/ui/linkify'
+
+export function ChatArea({ conversationId, onClose }: { conversationId: string, onClose?: () => void }) {
+    const {
+        conversations,
+        messages,
+        isLoading,
+        sendMessage,
+        uploadFile,
+        deleteMessage,
+        deleteConversation,
+        currentUserId,
+        setActiveConversationId
+    } = useDm()
+
+    const [newMessage, setNewMessage] = useState('')
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+    const [showGifPicker, setShowGifPicker] = useState(false)
+    const [isDragging, setIsDragging] = useState(false)
+    const [previewImage, setPreviewImage] = useState<string | null>(null)
+
+    const scrollRef = useRef<HTMLDivElement>(null)
+    const emojiPickerRef = useRef<HTMLDivElement>(null)
+    const gifPickerRef = useRef<HTMLDivElement>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
+
+    // Drag & Drop Handlers
+    const onDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        setIsDragging(true)
+    }, [])
+
+    const onDragLeave = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        setIsDragging(false)
+    }, [])
+
+    const onDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        setIsDragging(false)
+        const files = Array.from(e.dataTransfer.files)
+        if (files.length > 0) {
+            handleFileUpload(files)
+        }
+    }, [])
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            handleFileUpload(Array.from(e.target.files))
+        }
+    }
+
+    const handleFileUpload = async (files: File[]) => {
+        for (const file of files) {
+            await uploadFile(file)
+        }
+    }
+
+    const handleCopyText = (text: string) => {
+        navigator.clipboard.writeText(text)
+        toast.success('Text copied')
+    }
+
+    // Sync active ID
+    useEffect(() => {
+        setActiveConversationId(conversationId)
+    }, [conversationId, setActiveConversationId])
+
+    // Auto-scroll only on new messages (length change), not on updates (deletes)
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+        }
+    }, [messages.length, conversationId])
+
+    // Close pickers when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+                setShowEmojiPicker(false)
+            }
+            if (gifPickerRef.current && !gifPickerRef.current.contains(event.target as Node)) {
+                setShowGifPicker(false)
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside)
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside)
+        }
+    }, [])
+
+    const activeConversation = conversations.find(c => c.id === conversationId)
+
+    const handleSend = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!newMessage.trim()) return
+        sendMessage(newMessage)
+        setNewMessage('')
+        setShowEmojiPicker(false)
+    }
+
+    const handleSendGif = (url: string) => {
+        sendMessage(url, 'image') // Sending as image type for now, or 'gif' if supported by backend
+        setShowGifPicker(false)
+    }
+
+    const onEmojiClick = (emojiObject: any) => {
+        setNewMessage(prev => prev + emojiObject.emoji)
+    }
+
+    if (!activeConversation) return <div className="flex-1 bg-transparent" />
+
+    return (
+        <div
+            className="flex-1 flex flex-col bg-transparent min-w-0 relative h-full overflow-hidden"
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+        >
+            {/* Image Preview Overlay */}
+            <AnimatePresence>
+                {previewImage && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-8"
+                        onClick={() => setPreviewImage(null)}
+                    >
+                        <motion.img
+                            initial={{ scale: 0.9 }}
+                            animate={{ scale: 1 }}
+                            exit={{ scale: 0.9 }}
+                            src={previewImage}
+                            alt="Preview"
+                            className="max-w-full max-h-full rounded-lg shadow-2xl object-contain"
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                        <button
+                            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                            onClick={() => setPreviewImage(null)}
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Header */}
+            <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-transparent z-10 shrink-0 select-none">
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <Avatar className="w-8 h-8 border border-white/10">
+                            <AvatarImage src={activeConversation.otherUser.avatar_url || undefined} />
+                            <AvatarFallback className="bg-stone-800 text-stone-300">
+                                {activeConversation.otherUser.username[0].toUpperCase()}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-stone-950" />
+                    </div>
+                    <div>
+                        <span className="font-bold text-white font-serif tracking-wide text-lg block leading-none">
+                            {activeConversation.otherUser.full_name || activeConversation.otherUser.username}
+                        </span>
+                        <span className="text-[10px] text-stone-500 font-medium uppercase tracking-wider">
+                            @{activeConversation.otherUser.username}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2 text-stone-400">
+                    <Button variant="ghost" size="icon" className="hover:text-white hover:bg-white/5">
+                        <Phone className="w-5 h-5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="hover:text-white hover:bg-white/5">
+                        <Video className="w-5 h-5" />
+                    </Button>
+
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="hover:text-white hover:bg-white/5">
+                                <MoreVertical className="w-5 h-5" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-stone-900 border-white/10 text-stone-200">
+                            <DropdownMenuItem
+                                onClick={() => deleteConversation(activeConversation.id)}
+                                className="text-red-400 focus:text-red-400 focus:bg-red-500/10 cursor-pointer gap-2"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                                Delete Chat
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                            setActiveConversationId(null)
+                            if (onClose) onClose()
+                        }}
+                        className="hover:text-white hover:bg-white/5 text-stone-500"
+                    >
+                        <X className="w-5 h-5" />
+                    </Button>
+                </div>
+            </div>
+
+            {/* Messages */}
+            <div
+                ref={scrollRef}
+                className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col min-h-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
+            >
+                <div className="flex-1" /> {/* Spacer */}
+
+                <div className="w-full max-w-4xl mx-auto space-y-2 pb-4">
+                    {/* Welcome Message - Only show when no messages */}
+                    {messages.length === 0 && !isLoading && (
+                        <div className="mb-8 text-center py-10">
+                            <Avatar className="w-24 h-24 mx-auto mb-4 border-4 border-stone-900 shadow-2xl">
+                                <AvatarImage src={activeConversation.otherUser.avatar_url || undefined} />
+                                <AvatarFallback className="bg-stone-800 text-stone-300 text-4xl">
+                                    {activeConversation.otherUser.username[0].toUpperCase()}
+                                </AvatarFallback>
+                            </Avatar>
+                            <h1 className="text-3xl font-bold text-white mb-2 font-serif">
+                                {activeConversation.otherUser.full_name || activeConversation.otherUser.username}
+                            </h1>
+                            <p className="text-stone-400 text-sm max-w-md mx-auto">
+                                This is the beginning of your direct message history with <span className="font-bold text-stone-200">@{activeConversation.otherUser.username}</span>.
+                            </p>
+                        </div>
+                    )}
+
+                    {isLoading && messages.length === 0 ? (
+                        <div className="flex justify-center py-10">
+                            <div className="animate-spin w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full" />
+                        </div>
+                    ) : (
+                        <AnimatePresence initial={false}>
+                            {messages.map((msg, idx) => {
+                                const isMe = msg.sender_id === currentUserId
+
+                                return (
+                                    <motion.div
+                                        key={msg.id}
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.2 } }}
+                                        className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} group relative`}
+                                    >
+                                        <div className={`flex max-w-[80%] md:max-w-[70%] gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'} items-end`}>
+                                            {/* Avatar */}
+                                            <Avatar className="w-8 h-8 mb-1 border border-white/10 shrink-0">
+                                                <AvatarImage src={isMe ? undefined : activeConversation.otherUser.avatar_url || undefined} />
+                                                <AvatarFallback className="bg-stone-800 text-stone-300 text-xs">
+                                                    {isMe ? 'ME' : activeConversation.otherUser.username[0].toUpperCase()}
+                                                </AvatarFallback>
+                                            </Avatar>
+
+                                            <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} min-w-0`}>
+                                                {/* Header */}
+                                                <div className={`flex items-center gap-2 mb-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                                                    <span className="font-bold text-stone-200 text-xs">
+                                                        {isMe ? 'You' : activeConversation.otherUser.full_name || activeConversation.otherUser.username}
+                                                    </span>
+                                                    <span className="text-[10px] text-stone-500">
+                                                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                </div>
+
+                                                {/* Content Bubble Wrapper */}
+                                                <div className={`relative group/bubble flex items-center gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                                                    <div className={`relative px-4 py-2 rounded-2xl text-sm break-words shadow-sm transition-all duration-300 ${msg.is_deleted
+                                                        ? 'bg-white/5 text-stone-500 italic border border-white/5'
+                                                        : isMe
+                                                            ? 'bg-orange-600 text-white rounded-tr-none'
+                                                            : 'bg-stone-800 text-stone-200 rounded-tl-none'
+                                                        }`}>
+                                                        <AnimatePresence mode="wait">
+                                                            {msg.is_deleted ? (
+                                                                <motion.span
+                                                                    key="deleted"
+                                                                    initial={{ opacity: 0, filter: 'blur(5px)' }}
+                                                                    animate={{ opacity: 1, filter: 'blur(0px)' }}
+                                                                    transition={{ duration: 0.3 }}
+                                                                    className="flex items-center gap-2"
+                                                                >
+                                                                    <Trash2 className="w-3 h-3" />
+                                                                    This message was deleted
+                                                                </motion.span>
+                                                            ) : (
+                                                                <motion.div
+                                                                    key="content"
+                                                                    exit={{ opacity: 0, scale: 0.9, filter: 'blur(4px)' }}
+                                                                    transition={{ duration: 0.2 }}
+                                                                >
+                                                                    {msg.type === 'image' || msg.type === 'gif' ? (
+                                                                        <div
+                                                                            className="group/image relative cursor-pointer overflow-hidden rounded-lg mt-1"
+                                                                            onClick={() => setPreviewImage(msg.content)}
+                                                                        >
+                                                                            <div className="w-32 h-32 md:w-40 md:h-40 bg-black/20">
+                                                                                <img
+                                                                                    src={msg.content}
+                                                                                    alt="Content"
+                                                                                    className="w-full h-full object-cover transition-transform duration-300 group-hover/image:scale-110"
+                                                                                />
+                                                                            </div>
+                                                                            <div className="absolute inset-0 bg-black/0 group-hover/image:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover/image:opacity-100">
+                                                                                <ImageIcon className="w-6 h-6 text-white drop-shadow-lg" />
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : msg.type === 'file' ? (
+                                                                        <a
+                                                                            href={msg.content}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="flex items-center gap-3 p-3 bg-stone-900/50 rounded-lg hover:bg-stone-900 transition-colors border border-white/10"
+                                                                        >
+                                                                            <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400">
+                                                                                <FileText className="w-6 h-6" />
+                                                                            </div>
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <p className="font-medium text-stone-200 truncate">{msg.file_name || 'Attachment'}</p>
+                                                                                <p className="text-xs text-stone-500">{msg.file_size ? `${(msg.file_size / 1024).toFixed(1)} KB` : 'File'}</p>
+                                                                            </div>
+                                                                        </a>
+                                                                    ) : (
+                                                                        <p className="whitespace-pre-wrap leading-relaxed">
+                                                                            <Linkify text={msg.content} />
+                                                                        </p>
+                                                                    )}
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
+                                                    </div>
+
+                                                    {/* Minimal Action Bar (Side of Message) */}
+                                                    {!msg.is_deleted && (
+                                                        <div className={`opacity-0 group-hover/bubble:opacity-100 transition-all duration-200 flex items-center gap-1`}>
+                                                            {/* Reply */}
+                                                            <button
+                                                                className="p-1.5 text-stone-500 hover:text-white transition-colors"
+                                                                title="Reply"
+                                                            >
+                                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" /></svg>
+                                                            </button>
+
+                                                            {/* Copy */}
+                                                            <button
+                                                                onClick={() => handleCopyText(msg.content)}
+                                                                className="p-1.5 text-stone-500 hover:text-white transition-colors"
+                                                                title="Copy Text"
+                                                            >
+                                                                <Copy className="w-3.5 h-3.5" />
+                                                            </button>
+
+                                                            {/* Delete (Only Me) */}
+                                                            {isMe && (
+                                                                <button
+                                                                    onClick={() => deleteMessage(msg.id)}
+                                                                    className="p-1.5 text-stone-500 hover:text-red-400 transition-colors group/trash"
+                                                                    title="Delete Message"
+                                                                >
+                                                                    <Trash2 className="w-3.5 h-3.5 group-hover/trash:animate-bounce" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )
+                            })}
+                        </AnimatePresence>
+                    )}
+                </div>
+            </div>
+
+            {/* Drag & Drop Overlay */}
+            {isDragging && (
+                <div className="absolute inset-0 bg-stone-900/80 backdrop-blur-sm z-50 flex items-center justify-center border-2 border-dashed border-orange-500 m-4 rounded-xl">
+                    <div className="text-center">
+                        <div className="w-16 h-16 bg-orange-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-orange-500">
+                            <ImageIcon className="w-8 h-8" />
+                        </div>
+                        <h3 className="text-xl font-bold text-white mb-1">Drop files to upload</h3>
+                        <p className="text-stone-400">Images and files supported</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Input Area */}
+            <div className="px-6 pb-6 pt-2 relative w-full max-w-4xl mx-auto shrink-0">
+                {/* Emoji Picker Popover */}
+                <AnimatePresence>
+                    {showEmojiPicker && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                            className="absolute bottom-24 right-0 z-50 shadow-2xl rounded-xl overflow-hidden border border-white/10"
+                            ref={emojiPickerRef}
+                        >
+                            <EmojiPicker
+                                theme={Theme.DARK}
+                                onEmojiClick={onEmojiClick}
+                                skinTonesDisabled
+                                searchDisabled={false}
+                                width={350}
+                                height={400}
+                            />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* GIF Picker Popover */}
+                <AnimatePresence>
+                    {showGifPicker && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                            className="absolute bottom-24 right-12 z-50 shadow-2xl rounded-xl overflow-hidden border border-white/10"
+                            ref={gifPickerRef}
+                        >
+                            <GifPicker onSelect={handleSendGif} />
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <div className="bg-stone-900/90 backdrop-blur-xl rounded-full px-2 py-2 flex items-center gap-2 border border-white/10 shadow-2xl focus-within:border-orange-500/50 transition-all focus-within:ring-1 focus-within:ring-orange-500/20">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button
+                                className="w-10 h-10 rounded-full flex items-center justify-center text-stone-400 hover:text-white hover:bg-white/5 transition-colors"
+                                title="Add files"
+                            >
+                                <PlusCircle className="w-6 h-6" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="bg-stone-900 border-white/10 text-stone-200 w-48">
+                            <DropdownMenuItem className="cursor-pointer gap-2 hover:bg-white/5 focus:bg-white/5 focus:text-white" onClick={() => fileInputRef.current?.click()}>
+                                <ImageIcon className="w-4 h-4 text-green-400" />
+                                Upload Image
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="cursor-pointer gap-2 hover:bg-white/5 focus:bg-white/5 focus:text-white" onClick={() => fileInputRef.current?.click()}>
+                                <FileText className="w-4 h-4 text-blue-400" />
+                                Upload File
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        onChange={handleFileSelect}
+                        multiple
+                    />
+
+                    <form onSubmit={handleSend} className="flex-1">
+                        <input
+                            value={newMessage}
+                            onChange={(e) => setNewMessage(e.target.value)}
+                            placeholder={`Message @${activeConversation.otherUser.username}`}
+                            className="w-full bg-transparent border-none text-stone-200 placeholder:text-stone-500 focus:outline-none px-2 text-sm"
+                        />
+                    </form>
+
+                    <div className="flex items-center gap-1 pr-2">
+                        {/* Gift Button - Placeholder */}
+                        <button
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-stone-400 hover:text-white hover:bg-white/5 transition-colors"
+                            title="Send a Gift (Coming Soon)"
+                            onClick={() => toast('Gifting coming soon!', { icon: '🎁' })}
+                        >
+                            <Gift className="w-5 h-5" />
+                        </button>
+
+                        {/* GIF Button - Moved to 2nd position (Sticker icon) */}
+                        <button
+                            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/5 ${showGifPicker ? 'text-orange-500' : 'text-stone-400 hover:text-white'}`}
+                            title="Send a GIF"
+                            onClick={() => {
+                                setShowGifPicker(!showGifPicker)
+                                setShowEmojiPicker(false)
+                            }}
+                        >
+                            <Sticker className="w-5 h-5" />
+                        </button>
+
+                        {/* Emoji Button */}
+                        <button
+                            onClick={() => {
+                                setShowEmojiPicker(!showEmojiPicker)
+                                setShowGifPicker(false)
+                            }}
+                            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/5 ${showEmojiPicker ? 'text-orange-500' : 'text-stone-400 hover:text-white'}`}
+                            title="Send an Emoji"
+                        >
+                            <Smile className="w-5 h-5" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}

@@ -1,0 +1,333 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase/client'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { MessageSquare, MoreVertical, Check, X, Search, Trash2, ArrowLeft } from 'lucide-react'
+import { useDm } from '@/hooks/useDm'
+import { toast } from 'react-hot-toast'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+
+type Tab = 'online' | 'all' | 'pending' | 'blocked' | 'add_friend'
+
+export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => void, onBack?: () => void }) {
+    const [activeTab, setActiveTab] = useState<Tab>('online')
+    const [buddies, setBuddies] = useState<any[]>([])
+    const [requests, setRequests] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+    const { startDm } = useDm()
+
+    useEffect(() => {
+        fetchData()
+    }, [])
+
+    const fetchData = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
+
+            // 1. Fetch Buddies
+            const { data: connections, error } = await supabase
+                .from('study_connections')
+                .select(`
+          id,
+          requester:profiles!requester_id(id, username, full_name, avatar_url, is_online),
+          receiver:profiles!receiver_id(id, username, full_name, avatar_url, is_online)
+        `)
+                .or(`requester_id.eq.${user.id},receiver_id.eq.${user.id}`)
+                .eq('status', 'accepted')
+
+            if (error) throw error
+
+            const formattedBuddies = connections.map((conn: any) => {
+                const isRequester = conn.requester.id === user.id
+                return {
+                    ...(isRequester ? conn.receiver : conn.requester),
+                    connectionId: conn.id // Store connection ID for deletion
+                }
+            })
+
+            // Deduplicate buddies to prevent "duplicate key" errors
+            const uniqueBuddies = Object.values(
+                formattedBuddies.reduce((acc: any, buddy: any) => {
+                    acc[buddy.id] = buddy
+                    return acc
+                }, {})
+            )
+
+            setBuddies(uniqueBuddies)
+
+            // 2. Fetch Requests
+            const { data: pending, error: pendingError } = await supabase
+                .from('study_connections')
+                .select(`
+          id,
+          requester:profiles!requester_id(id, username, full_name, avatar_url, is_online)
+        `)
+                .eq('receiver_id', user.id)
+                .eq('status', 'pending')
+
+            if (pendingError) throw pendingError
+
+            setRequests(pending.map((p: any) => ({
+                id: p.id,
+                requester: p.requester
+            })))
+
+        } catch (error) {
+            console.error('Error fetching friends:', error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const handleResponse = async (connectionId: string, status: 'accepted' | 'rejected') => {
+        try {
+            const { error } = await supabase
+                .from('study_connections')
+                .update({ status })
+                .eq('id', connectionId)
+
+            if (error) throw error
+            toast.success(status === 'accepted' ? 'Request accepted' : 'Request rejected')
+            fetchData()
+        } catch (error) {
+            toast.error('Failed to update request')
+        }
+    }
+
+    const handleUnfriend = async (connectionId: string) => {
+        try {
+            const { error } = await supabase
+                .from('study_connections')
+                .delete()
+                .eq('id', connectionId)
+
+            if (error) throw error
+            toast.success('Friend removed')
+            fetchData()
+        } catch (error) {
+            toast.error('Failed to remove friend')
+        }
+    }
+
+    const handleMessage = async (buddyId: string) => {
+        const conversationId = await startDm(buddyId)
+        if (conversationId) {
+            onStartDm(conversationId)
+        }
+    }
+
+    const filteredBuddies = buddies.filter(b => {
+        if (activeTab === 'online') return b.is_online
+        if (activeTab === 'all') return true
+        return false
+    })
+
+    return (
+        <div className="flex-1 flex flex-col bg-transparent min-w-0">
+            {/* Header */}
+            <div className="h-12 border-b border-white/5 flex items-center px-6 gap-4 shadow-sm bg-stone-950/40 backdrop-blur-md">
+                {/* Mobile Back Button */}
+                {onBack && (
+                    <button onClick={onBack} className="md:hidden mr-2 text-stone-400 hover:text-white">
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                )}
+                <div className="flex items-center gap-2 text-stone-400 font-bold mr-4">
+                    <div className="w-6 h-6"><UsersIcon /></div>
+                    <span className="text-white">Friends</span>
+                </div>
+                <div className="h-6 w-[1px] bg-white/10" />
+
+                <TabButton active={activeTab === 'online'} onClick={() => setActiveTab('online')}>Online</TabButton>
+                <TabButton active={activeTab === 'all'} onClick={() => setActiveTab('all')}>All</TabButton>
+                <TabButton active={activeTab === 'pending'} onClick={() => setActiveTab('pending')}>Pending</TabButton>
+                <TabButton active={activeTab === 'blocked'} onClick={() => setActiveTab('blocked')}>Blocked</TabButton>
+                <button
+                    onClick={() => setActiveTab('add_friend')}
+                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${activeTab === 'add_friend' ? 'text-green-400 bg-transparent' : 'bg-green-600 text-white hover:bg-green-700 shadow-lg shadow-green-900/20'}`}
+                >
+                    Add Friend
+                </button>
+            </div>
+
+            {/* Main Layout */}
+            <div className="flex-1 flex overflow-hidden">
+                {/* Content */}
+                <div className="flex-1 p-6 overflow-y-auto">
+                    {activeTab === 'add_friend' ? (
+                        <div className="max-w-2xl">
+                            <h2 className="text-white font-bold text-lg mb-2 font-serif">ADD FRIEND</h2>
+                            <p className="text-stone-400 text-xs mb-4">You can add friends with their username.</p>
+                            <div className="relative">
+                                <Input
+                                    placeholder="You can add friends with their username."
+                                    className="bg-stone-900/50 border-white/10 h-12 text-stone-200 placeholder:text-stone-500 focus:border-orange-500 transition-all rounded-xl"
+                                />
+                                <Button className="absolute right-1 top-1 h-10 bg-orange-600 hover:bg-orange-700 text-white rounded-lg">
+                                    Send Friend Request
+                                </Button>
+                            </div>
+
+                            <div className="mt-8 flex flex-col items-center justify-center py-10">
+                                <div className="w-40 h-40 bg-white/5 rounded-full mb-4 flex items-center justify-center border border-white/5">
+                                    <img src="/empty-friends.svg" alt="" className="w-24 opacity-50 grayscale" />
+                                </div>
+                                <p className="text-stone-400">Waiting for friends...</p>
+                            </div>
+                        </div>
+                    ) : activeTab === 'pending' ? (
+                        <div>
+                            <h2 className="text-stone-400 font-bold text-xs mb-4 uppercase tracking-wider">Pending — {requests.length}</h2>
+                            <div className="space-y-2">
+                                {requests.map(req => (
+                                    <div key={req.id} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl group border border-white/5 transition-all">
+                                        <div className="flex items-center gap-3">
+                                            <Avatar className="w-10 h-10 border border-white/10">
+                                                <AvatarImage src={req.requester.avatar_url || undefined} />
+                                                <AvatarFallback className="bg-stone-800 text-stone-300">
+                                                    {req.requester.username[0].toUpperCase()}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <div className="font-bold text-white flex items-center gap-2">
+                                                    {req.requester.full_name || req.requester.username}
+                                                </div>
+                                                <div className="text-xs text-stone-400">Incoming Friend Request</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => handleResponse(req.id, 'accepted')} className="w-9 h-9 rounded-full bg-stone-900 flex items-center justify-center text-stone-400 hover:text-green-500 hover:bg-stone-800 transition-colors border border-white/5">
+                                                <Check className="w-5 h-5" />
+                                            </button>
+                                            <button onClick={() => handleResponse(req.id, 'rejected')} className="w-9 h-9 rounded-full bg-stone-900 flex items-center justify-center text-stone-400 hover:text-red-500 hover:bg-stone-800 transition-colors border border-white/5">
+                                                <X className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {requests.length === 0 && (
+                                    <div className="text-center py-10 text-stone-500">
+                                        There are no pending friend requests.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <div>
+                            <h2 className="text-stone-400 font-bold text-xs mb-4 uppercase tracking-wider">
+                                {activeTab === 'online' ? 'Online' : 'All Friends'} — {filteredBuddies.length}
+                            </h2>
+                            <div className="space-y-2">
+                                {filteredBuddies.map(buddy => (
+                                    <div key={buddy.id} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl group border border-white/5 cursor-pointer transition-all" onClick={() => handleMessage(buddy.id)}>
+                                        <div className="flex items-center gap-3">
+                                            <div className="relative">
+                                                <Avatar className="w-10 h-10 border border-white/10">
+                                                    <AvatarImage src={buddy.avatar_url || undefined} />
+                                                    <AvatarFallback className="bg-stone-800 text-stone-300">
+                                                        {buddy.username[0].toUpperCase()}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-stone-900 rounded-full ${buddy.is_online ? 'bg-green-500' : 'bg-stone-500'}`} />
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-white flex items-center gap-2">
+                                                    {buddy.full_name || buddy.username}
+                                                    <span className="hidden group-hover:inline text-xs text-stone-500">#{buddy.username.substring(0, 4)}</span>
+                                                </div>
+                                                <div className="text-xs text-stone-400">
+                                                    {buddy.is_online ? 'Online' : 'Offline'}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    handleMessage(buddy.id)
+                                                }}
+                                                className="w-9 h-9 rounded-full bg-stone-900 flex items-center justify-center text-stone-400 hover:text-white hover:bg-stone-800 border border-white/5"
+                                            >
+                                                <MessageSquare className="w-4 h-4" />
+                                            </button>
+
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <button className="w-9 h-9 rounded-full bg-stone-900 flex items-center justify-center text-stone-400 hover:text-white hover:bg-stone-800 border border-white/5">
+                                                        <MoreVertical className="w-4 h-4" />
+                                                    </button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="bg-stone-900 border-white/10 text-stone-200">
+                                                    <DropdownMenuItem
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            handleUnfriend(buddy.connectionId)
+                                                        }}
+                                                        className="text-red-400 focus:text-red-400 focus:bg-red-500/10 cursor-pointer gap-2"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                        Unfriend
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                    </div>
+                                ))}
+                                {filteredBuddies.length === 0 && (
+                                    <div className="text-center py-10 text-stone-500">
+                                        No friends found.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Right Sidebar (Active Now) */}
+                <div className="w-[360px] border-l border-white/5 hidden lg:flex flex-col p-6 bg-stone-950/40 backdrop-blur-md">
+                    <h2 className="font-bold text-xl text-white mb-6 font-serif">Active Now</h2>
+                    <div className="text-center py-10">
+                        <p className="text-stone-400 font-bold mb-2">It's quiet for now...</p>
+                        <p className="text-stone-500 text-sm">When a friend starts an activity—like playing a game or hanging out on voice—we'll show it here!</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function TabButton({ active, children, onClick }: { active: boolean, children: React.ReactNode, onClick: () => void }) {
+    return (
+        <button
+            onClick={onClick}
+            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${active
+                ? 'bg-stone-800 text-white shadow-sm border border-white/5'
+                : 'text-stone-400 hover:bg-stone-800/50 hover:text-stone-200'
+                }`}
+        >
+            {children}
+        </button>
+    )
+}
+
+function UsersIcon() {
+    return (
+        <svg aria-hidden="true" role="img" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <g fill="none" fillRule="evenodd">
+                <path fill="currentColor" d="M14 8.00598C14 10.211 12.206 12.006 10 12.006C7.795 12.006 6 10.211 6 8.00598C6 5.80098 7.794 4.00598 10 4.00598C12.206 4.00598 14 5.80098 14 8.00598ZM2 19.006C2 15.473 5.29 13.006 10 13.006C14.711 13.006 18 15.473 18 19.006V20.006H2V19.006Z"></path>
+                <path fill="currentColor" d="M14 8.00598C14 10.211 12.206 12.006 10 12.006C7.795 12.006 6 10.211 6 8.00598C6 5.80098 7.794 4.00598 10 4.00598C12.206 4.00598 14 5.80098 14 8.00598ZM2 19.006C2 15.473 5.29 13.006 10 13.006C14.711 13.006 18 15.473 18 19.006V20.006H2V19.006Z" opacity=".3"></path>
+                <path fill="currentColor" d="M20.0001 20.006H22.0001V19.006C22.0001 16.4433 20.2697 14.4415 17.5213 13.5352C19.0621 14.9127 20.0001 16.8059 20.0001 19.006V20.006Z"></path>
+                <path fill="currentColor" d="M14.8834 11.9077C16.6657 11.5044 18.0001 9.9077 18.0001 8.00598C18.0001 5.96916 16.4693 4.28218 14.4971 4.0367C15.4322 5.09334 16.0001 6.48524 16.0001 8.00598C16.0001 9.44888 15.4889 10.7742 14.6378 11.8102C14.7203 11.8418 14.8022 11.8743 14.8834 11.9077Z"></path>
+            </g>
+        </svg>
+    )
+}
