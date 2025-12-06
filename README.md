@@ -1,4 +1,4 @@
-# 🕉️ Chitchat (Gurukul)
+# 🕉️ Gurukul
 > *The Digital Ashram for the Modern Scholar.*
 
 ![Status](https://img.shields.io/badge/status-active-success.svg)
@@ -8,13 +8,13 @@
 ---
 
 ## 📜 The Story
-In an age of disconnected learning and sterile LMS platforms, **Chitchat (Gurukul)** was born from a simple desire: to bring the *soul* back to studying. 
+In an age of disconnected learning and sterile LMS platforms, **Gurukul** was born from a simple desire: to bring the *soul* back to studying. 
 
 We missed the feeling of a late-night library session. We missed the serendipity of meeting a study partner who changes your academic trajectory. We missed the "Sangha" (Community).
 
 So we built it. 
 
-**Chitchat** is not just a video calling app. It is a **persistent, gamified, spiritual study universe**. It combines the best of **Discord** (communities), **Omegle** (discovery), and **Forest** (focus) into a single, cohesive "Digital Gurukul".
+**Gurukul** is not just a video calling app. It is a **persistent, gamified, spiritual study universe**. It combines the best of **Discord** (communities), **Omegle** (discovery), and **Forest** (focus) into a single, cohesive "Digital Gurukul".
 
 ---
 
@@ -143,5 +143,5 @@ Distributed under the MIT License. See `LICENSE` for more information.
 ---
 
 <p align="center">
-  <small>Built with 🧡 by the Chitchat Team</small>
+  <small>Built with 🧡 by the Anigravity & Aniket </small>
 </p>
