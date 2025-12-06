@@ -384,6 +384,7 @@ export function useDm() {
         uploadFile,
         deleteMessage,
         deleteConversation,
+        archiveConversation: deleteConversation,
         startDm,
         currentUserId
     }

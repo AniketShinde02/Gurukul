@@ -1,134 +1,147 @@
-# 🎓 Chitchat (Gurukul) - The Future of Digital Learning Communities
+# 🕉️ Chitchat (Gurukul)
+> *The Digital Ashram for the Modern Scholar.*
 
-![Project Banner](https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=2671&auto=format&fit=crop)
-
-**Chitchat (Gurukul)** is a next-generation platform for student communities, blending the best of real-time communication (like Discord) with focused study tools and gamification. Built for students, by students, it creates a "Digital Gurukul" where learning is social, engaging, and verified.
-
-## 🚀 Features
-
-### 🌟 Core Experience
-*   **Real-time Messaging**: Robust chat with rich text, markdown support, and file sharing.
-*   **Voice & Video Lounges**: High-quality audio/video calls powered by LiveKit, with easy screen sharing.
-*   **"Sangha" (Servers)**: Organized communities with custom text, voice, and video channels.
-*   **Study Rooms**: Dedicated visuals and tools for focused study sessions.
-
-### 🛡️ Student Logic & Safety
-*   **College Verification**: Secure `.edu` email auto-verification and manual student ID scanning (OCR).
-*   **Role-Based Access**: Granular permissions (Admin, Moderator, Student, Guest) for secure community management.
-*   **Private & Secure**: Row Level Security (RLS) ensures your data is yours alone.
-
-### 🎮 Gamification & Productivity
-*   **XP & Leveling System**: Earn XP for every minute you study. Level up and show off your scholar rank!
-*   **Global Leaderboards**: Compete with other students for the top spot on the podium.
-*   **Focus Tools**: Integrated Pomodoro Timer, Lo-Fi Music Player, and shared Whiteboards.
-
-### 🎨 Design & Tech
-*   **"Vedic" Dark Mode**: A beautiful, eye-strain-friendly immersive dark theme with glassmorphism effects.
-*   **Mobile Optimized**: Responsive layout with native-like navigation drawers for learning on the go.
-*   **Modern Stack**: Built with the latest tech for speed and scalability.
+![Status](https://img.shields.io/badge/status-active-success.svg)
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 ---
 
-## 🛠️ Tech Stack
+## 📜 The Story
+In an age of disconnected learning and sterile LMS platforms, **Chitchat (Gurukul)** was born from a simple desire: to bring the *soul* back to studying. 
 
-*   **Framework**: [Next.js 14](https://nextjs.org/) (App Router)
-*   **Language**: [TypeScript](https://www.typescriptlang.org/)
-*   **Styling**: [Tailwind CSS](https://tailwindcss.com/) + [Shadcn UI](https://ui.shadcn.com/)
-*   **Icons**: [Lucide React](https://lucide.dev/)
-*   **Backend & Auth**: [Supabase](https://supabase.com/) (PostgreSQL, Auth, Realtime, Storage)
-*   **Real-time Media**: [LiveKit](https://livekit.io/) (WebRTC Video/Audio)
-*   **State Management**: React Hooks + Optimistic UI updates
-*   **Deployment**: Vercel (Recommended)
+We missed the feeling of a late-night library session. We missed the serendipity of meeting a study partner who changes your academic trajectory. We missed the "Sangha" (Community).
+
+So we built it. 
+
+**Chitchat** is not just a video calling app. It is a **persistent, gamified, spiritual study universe**. It combines the best of **Discord** (communities), **Omegle** (discovery), and **Forest** (focus) into a single, cohesive "Digital Gurukul".
 
 ---
 
-## 🏁 Getting Started
+## ✨ Features at a Glance
 
-Follow these steps to set up the project locally.
+### 🏛️ The Sangha (Community)
+Create or join topic-specific **Sanghas** (Servers). Whether you're studying *Quantum Physics* or *Sanskrit Literature*, there's a home for you.
+- **Rich Text Channels**: Markdown support, code blocks, and file sharing.
+- **Voice Lounges**: Drop-in audio spaces for casual chatter.
+- **Cinema Rooms**: Watch lectures together with synchronized playback.
+
+### 📹 The Study Lounge (Video)
+Powered by **LiveKit** and **WebRTC**, our video calls are crystal clear and lag-free.
+- **Focus Mode**: Minimalist UI for deep work.
+- **Whiteboard**: Collaborative **Excalidraw** integration for solving problems together in real-time.
+- **Screen Share**: 1080p screen sharing for peer tutoring.
+
+### 🧘 Gamified Focus
+Studying shouldn't feel like a chore.
+- **XP System**: Earn XP for every minute you study.
+- **Leaderboards**: Compete with friends and the global community.
+- **Pomodoro Timer**: Built-in flow-state management.
+- **Lo-Fi Player**: Curated beats to keep you in the zone.
+
+### 🎨 The "Vedic" Aesthetic
+A UI Design Language we call **"Stone & Saffron"**.
+- **Dark Mode First**: Deep `stone-950` backgrounds tailored for late-night sessions.
+- **Glassmorphism**: Subtle blurs (`backdrop-blur-md`) that feel modern yet grounded.
+- **Motion**: Powered by `framer-motion` for fluid, organic transitions.
+
+---
+
+## 🛠️ Technology Stack
+
+We believe in using the absolute best tools for the job.
+
+| Layer | Technology | Why? |
+|-------|------------|------|
+| **Framework** | ![Next.js](https://img.shields.io/badge/Next.js-14-black) | The React Framework for the Web. App Router for nested layouts. |
+| **Language** | ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue) | Strict typing for a bulletproof codebase. |
+| **Styling** | ![Tailwind](https://img.shields.io/badge/Tailwind-3-cyan) | Utility-first CSS for rapid UI development. |
+| **Components** | ![Radix UI](https://img.shields.io/badge/Radix_UI-Primitives-white) | Accessible, unstyled primitives for custom design systems. |
+| **Database** | ![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green) | Scalable, relational data with Row Level Security. |
+| **Realtime** | ![LiveKit](https://img.shields.io/badge/LiveKit-WebRTC-purple) | World-class video and audio infrastructure. |
+| **Whiteboard** | ![Excalidraw](https://img.shields.io/badge/Excalidraw-Canvas-yellow) | The best hand-drawn whiteboard tool on the web. |
+
+---
+
+## 📸 Functionality Showcase
+
+### The Dashboard
+*Your central hub for productivity.*
+> **[Screenshot Needed: Dashboard View]**
+> *Showcasing: User stats card, "Quick Join" buttons, Friend activity feed.*
+
+### The Study Room
+*Where the magic happens.*
+> **[Screenshot Needed: Active Call]**
+> *Showcasing: Grid video view, whiteboard open on the side, chat drawer expanded.*
+
+### The Sangha
+*Your community home.*
+> **[Screenshot Needed: Server Channel List]**
+> *Showcasing: Channel categories, active voice users, server banner.*
+
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
-*   Node.js 18+ installed
-*   A [Supabase](https://supabase.com/) account
-*   A [LiveKit](https://livekit.io/) account
+- Node.js 18+
+- Use `npm` (Project standard)
 
-### 1. Clone the Repository
-```bash
-git clone https://github.com/YOUR_USERNAME/chitchat.git
-cd chitchat
-```
+### Installation
 
-### 2. Install Dependencies
-```bash
-npm install
-```
+1. **Clone the Repo**
+   ```bash
+   git clone https://github.com/your-username/chitchat.git
+   cd chitchat
+   ```
 
-### 3. Environment Variables
-Create a `.env.local` file in the root directory and add keys from your Supabase and LiveKit dashboards:
+2. **Install Dependencies**
+   ```bash
+   npm install
+   ```
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+3. **Configure Environment**
+   Create a `.env.local` file:
+   ```env
+   # Supabase
+   NEXT_PUBLIC_SUPABASE_URL=your_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_key
+   SUPABASE_SERVICE_ROLE_KEY=your_secret_role_key
 
-LIVEKIT_API_KEY=your_livekit_key
-LIVEKIT_API_SECRET=your_livekit_secret
-NEXT_PUBLIC_LIVEKIT_URL=your_livekit_url
-```
+   # LiveKit
+   LIVEKIT_API_KEY=your_key
+   LIVEKIT_API_SECRET=your_secret
+   NEXT_PUBLIC_LIVEKIT_URL=wss://your-project.livekit.cloud
+   ```
 
-### 4. Database Setup
-Run the SQL scripts located in the `scripts/` folder in your Supabase SQL Editor to set up tables (Profiles, Rooms, Messages, XP, Verification).
+4. **Run Development Server**
+   ```bash
+   npm run dev
+   ```
 
-### 5. Run the Dev Server
-```bash
-npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000) to see the app in action!
-
----
-
-## 📱 Screenshots
-
-| Dashboard | Study Room |
-|:---:|:---:|
-| *Admin Dashboard & Quick Actions* | *Focus Mode with Timer* |
-
-| Mobile View | Leaderboard |
-|:---:|:---:|
-| *Responsive Navigation* | *Gamified Rankings* |
+5. **Visit the App**
+   Open `http://localhost:3000`
 
 ---
 
-## ⚡ Performance & Scalability
+## 🤝 Contribution Guidelines
 
-**Important**: This app is currently optimized for **<100 concurrent users**. Before scaling to production with thousands of users, please review:
+We follow a strict **"Quality First"** policy.
+1. **Fork** the repo.
+2. **Branch** off `main` (`git checkout -b feature/amazing-idea`).
+3. **Commit** with clear messages.
+4. **Push** and open a PR.
 
-- **[PERFORMANCE_BOTTLENECKS.md](./PERFORMANCE_BOTTLENECKS.md)** - Detailed analysis of scalability issues
-- **[QUICK_FIX_GUIDE.md](./QUICK_FIX_GUIDE.md)** - Step-by-step fixes for critical bottlenecks
-
-### Quick Actions Before Launch:
-
-1. **Add Database Indexes** (5 min) - See QUICK_FIX_GUIDE.md
-2. **Implement Pagination** (30 min) - Prevents data overload
-3. **Add Message Virtualization** (30 min) - Smooth scrolling for long chats
-
-**Estimated Impact**: 10-50x performance improvement
+> **Note**: Please ensure no TypeScript errors exist before pushing. Run `npx tsc --noEmit` to verify.
 
 ---
 
-## 🤝 Contributing
-
-We welcome contributions! Please fork the repository and submit a Pull Request.
-
-1.  Fork the Project
-2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4.  Push to the Branch (`git push origin feature/AmazingFeature`)
-5.  Open a Pull Request
-
-## 📄 License
-
+## 📜 License
 Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
-*Built with ❤️ for learners everywhere.*
+<p align="center">
+  <small>Built with 🧡 by the Chitchat Team</small>
+</p>

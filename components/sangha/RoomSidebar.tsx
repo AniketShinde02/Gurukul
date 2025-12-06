@@ -484,72 +484,48 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
 
             {/* Voice Connected Card */}
             {isConnected && (
-                <div className="bg-[#1E1F22] border-t border-white/5 p-2 pb-2 shrink-0">
-                    <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2 text-green-500">
-                            <Signal className="w-4 h-4" />
-                            <span className="text-[11px] font-bold uppercase tracking-wide">Voice Connected</span>
+                <div className="px-2 pb-2 shrink-0">
+                    <div className="bg-stone-900/50 border border-white/10 rounded-xl p-3 shadow-sm">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2 text-emerald-400">
+                                <div className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </div>
+                                <span className="text-[10px] font-bold uppercase tracking-wider">Voice Connected</span>
+                            </div>
                         </div>
-                    </div>
-                    <div className="mb-2 pl-0.5">
-                        <span className="text-xs font-bold text-white block truncate">{activeCallRoom || 'Study Lounge'} / General</span>
-                        <div className="flex items-center gap-2 text-[10px] text-stone-400 font-mono mt-0.5">
-                            <span className="bg-green-500/10 text-green-500 px-1 rounded">RTC Connected</span>
-                            <span>•</span>
-                            <span>{formatTime(duration)}</span>
-                        </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-1 border-t border-white/5 pt-2">
-                        <button
-                            onClick={leaveRoom}
-                            className="flex items-center justify-center p-1.5 rounded bg-stone-800 hover:bg-stone-700 text-white transition-colors text-xs font-medium"
-                        >
-                            <PhoneOff className="w-3 h-3 mr-1.5" />
-                            Disconnect
-                        </button>
-                        <button
-                            onClick={() => setShowServerSettings(true)}
-                            className="flex items-center justify-center p-1.5 rounded bg-stone-800 hover:bg-stone-700 text-white transition-colors text-xs font-medium"
-                        >
-                            <Settings className="w-3 h-3 mr-1.5" />
-                            Settings
-                        </button>
-                    </div>
-                </div>
-            )}
-            {isConnected && (
-                <div className="bg-[#1E1F22] border-t border-white/5 p-2 pb-2 shrink-0">
-                    <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2 text-green-500">
-                            <Signal className="w-4 h-4" />
-                            <span className="text-[11px] font-bold uppercase tracking-wide">Voice Connected</span>
+                        <div className="mb-3">
+                            <span className="text-sm font-bold text-white block truncate mb-1">{activeCallRoom || 'Study Lounge'}</span>
+                            <div className="flex items-center gap-2 text-[10px] text-stone-400 font-mono">
+                                <span className="text-emerald-400 flex items-center gap-1.5 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                    <Signal className="w-3 h-3" />
+                                    RTC Connected
+                                </span>
+                                <span>•</span>
+                                <span>{formatTime(duration)}</span>
+                            </div>
                         </div>
-                    </div>
-                    <div className="mb-2 pl-0.5">
-                        <span className="text-xs font-bold text-white block truncate">{activeCallRoom || 'Study Lounge'} / General</span>
-                        <div className="flex items-center gap-2 text-[10px] text-stone-400 font-mono mt-0.5">
-                            <span className="bg-green-500/10 text-green-500 px-1 rounded">RTC Connected</span>
-                            <span>•</span>
-                            <span>{formatTime(duration)}</span>
-                        </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-1 border-t border-white/5 pt-2">
-                        <button
-                            onClick={leaveRoom}
-                            className="flex items-center justify-center p-1.5 rounded bg-stone-800 hover:bg-stone-700 text-white transition-colors text-xs font-medium"
-                        >
-                            <PhoneOff className="w-3 h-3 mr-1.5" />
-                            Disconnect
-                        </button>
-                        <button
-                            onClick={() => setShowServerSettings(true)}
-                            className="flex items-center justify-center p-1.5 rounded bg-stone-800 hover:bg-stone-700 text-white transition-colors text-xs font-medium"
-                        >
-                            <Settings className="w-3 h-3 mr-1.5" />
-                            Settings
-                        </button>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                onClick={leaveRoom}
+                                className="flex items-center justify-center py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-all text-xs font-medium border border-red-500/10 hover:border-red-500/20"
+                            >
+                                <PhoneOff className="w-3 h-3 mr-1.5" />
+                                Disconnect
+                            </button>
+                            {can('manage_server') && (
+                                <button
+                                    onClick={() => setShowServerSettings(true)}
+                                    className="flex items-center justify-center py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 transition-all text-xs font-medium border border-white/5 hover:border-white/10"
+                                >
+                                    <Settings className="w-3 h-3 mr-1.5" />
+                                    Settings
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
