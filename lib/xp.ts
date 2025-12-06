@@ -81,7 +81,12 @@ export async function awardXP(userId: string, amount: number, reason: string) {
 
         if (updateError) throw updateError
 
-    } catch (error) {
-        console.error('Error awarding XP:', error)
+    } catch (error: any) {
+        console.error('Error awarding XP:', {
+            message: error?.message || 'Unknown error',
+            details: error?.details || error?.hint || 'No details',
+            code: error?.code,
+            error: error
+        })
     }
 }

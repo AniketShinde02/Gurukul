@@ -25,7 +25,7 @@ export function DmInterface() {
         isLoading,
         sendMessage,
         deleteMessage,
-        deleteConversation,
+        archiveConversation,
         currentUserId
     } = useDm()
 
@@ -135,12 +135,12 @@ export function DmInterface() {
                                                 <DropdownMenuItem
                                                     onClick={(e) => {
                                                         e.stopPropagation()
-                                                        deleteConversation(conv.id)
+                                                        archiveConversation(conv.id)
                                                     }}
                                                     className="text-red-400 focus:text-red-400 focus:bg-red-500/10 cursor-pointer gap-2"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
-                                                    Delete Chat
+                                                    Archive Chat
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>

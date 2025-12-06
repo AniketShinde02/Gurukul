@@ -31,6 +31,21 @@ export async function GET(
 
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+        // First, get the conversation to check delete timestamp
+        const { data: conversation } = await supabase
+            .from('dm_conversations')
+            .select('user1_id, user2_id, deleted_by_user1_at, deleted_by_user2_at')
+            .eq('id', params.id)
+            .single()
+
+        if (!conversation) {
+            return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+        }
+
+        // Determine which user is requesting and their delete timestamp
+        const isUser1 = conversation.user1_id === user.id
+        const deletedAt = isUser1 ? conversation.deleted_by_user1_at : conversation.deleted_by_user2_at
+
         const { searchParams } = new URL(request.url)
         const limit = parseInt(searchParams.get('limit') || '50')
         const before = searchParams.get('before') // timestamp for pagination
@@ -41,6 +56,11 @@ export async function GET(
             .eq('conversation_id', params.id)
             .order('created_at', { ascending: false })
             .limit(limit)
+
+        // If user deleted the chat, only show messages AFTER delete timestamp
+        if (deletedAt) {
+            query = query.gt('created_at', deletedAt)
+        }
 
         if (before) {
             query = query.lt('created_at', before)
@@ -109,20 +129,39 @@ export async function POST(
 
         if (error) throw error
 
-        // 2. Update conversation last_message
+        // 2. Update conversation last_message and unarchive if needed
         let preview = content
         if (type === 'image') preview = 'Sent an image'
         else if (type === 'file') preview = 'Sent a file'
         else if (type === 'gif') preview = 'Sent a GIF'
 
-        await supabase
+        // Get conversation to check which user is sending
+        const { data: conversation } = await supabase
             .from('dm_conversations')
-            .update({
+            .select('user1_id, user2_id, archived_by_user1, archived_by_user2')
+            .eq('id', params.id)
+            .single()
+
+        if (conversation) {
+            const isUser1 = conversation.user1_id === user.id
+            const updateData: any = {
                 last_message_at: new Date().toISOString(),
                 last_message_preview: preview,
                 updated_at: new Date().toISOString()
-            })
-            .eq('id', params.id)
+            }
+
+            // Unarchive for the sender (so they see the conversation again)
+            if (isUser1 && conversation.archived_by_user1) {
+                updateData.archived_by_user1 = false
+            } else if (!isUser1 && conversation.archived_by_user2) {
+                updateData.archived_by_user2 = false
+            }
+
+            await supabase
+                .from('dm_conversations')
+                .update(updateData)
+                .eq('id', params.id)
+        }
 
         return NextResponse.json({ message })
 

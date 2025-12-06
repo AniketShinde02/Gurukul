@@ -29,18 +29,26 @@ export async function POST(request: Request) {
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
         // 1. Verify they are connected buddies
-        // Use service role to bypass RLS issues
-        const adminSupabase = createServerClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_ROLE_KEY!,
-            { cookies: { get: () => undefined, set: () => { }, remove: () => { } } }
-        )
+        // Try to use service role if available, otherwise use regular client
+        const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY
+        const connectionClient = hasServiceRole
+            ? createServerClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                process.env.SUPABASE_SERVICE_ROLE_KEY!,
+                { cookies: { get: () => undefined, set: () => { }, remove: () => { } } }
+            )
+            : supabase
 
-        // Fetch all connections for the user and filter in memory to avoid complex OR syntax issues
-        const { data: connections } = await adminSupabase
+        // Fetch connections
+        const { data: connections, error: connError } = await connectionClient
             .from('study_connections')
             .select('*')
             .or(`requester_id.eq.${user.id},receiver_id.eq.${user.id}`)
+
+        if (connError) {
+            console.error('Error fetching connections:', connError)
+            return NextResponse.json({ error: 'Failed to check connection' }, { status: 500 })
+        }
 
         const connection = connections?.find((c: any) =>
             (c.requester_id === user.id && c.receiver_id === buddyId) ||
@@ -48,12 +56,10 @@ export async function POST(request: Request) {
         )
 
         if (!connection) {
-            console.log('No connection record found for:', user.id, buddyId)
             return NextResponse.json({ error: 'Not connected buddies (No record)' }, { status: 403 })
         }
 
         if (connection.status !== 'accepted') {
-            console.log('Connection status not accepted:', connection.status)
             return NextResponse.json({ error: `Connection is ${connection.status}, not accepted` }, { status: 403 })
         }
 

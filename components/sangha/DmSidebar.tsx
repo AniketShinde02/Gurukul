@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import { useDm } from '@/hooks/useDm'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -16,8 +15,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from '@/components/ui/button'
 
-export function DmSidebar({ onSelect }: { onSelect?: (id: string) => void }) {
-    const { conversations, activeConversationId, setActiveConversationId, deleteConversation } = useDm()
+type DmSidebarProps = {
+    dmState: ReturnType<typeof import('@/hooks/useDm').useDm>
+}
+
+export function DmSidebar({ dmState }: DmSidebarProps) {
+    const { conversations, activeConversationId, setActiveConversationId, deleteConversation } = dmState
     const [search, setSearch] = useState('')
 
     const filtered = conversations.filter(c =>
@@ -45,10 +48,7 @@ export function DmSidebar({ onSelect }: { onSelect?: (id: string) => void }) {
             {/* Friends Button */}
             <div className="px-2 pb-2">
                 <button
-                    onClick={() => {
-                        if (onSelect) onSelect('friends')
-                        setActiveConversationId(null)
-                    }}
+                    onClick={() => setActiveConversationId(null)}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${!activeConversationId
                         ? 'bg-stone-800 text-white shadow-md border border-white/5'
                         : 'text-stone-400 hover:bg-stone-800/50 hover:text-stone-200'
@@ -71,10 +71,7 @@ export function DmSidebar({ onSelect }: { onSelect?: (id: string) => void }) {
                         {filtered.map(conv => (
                             <div
                                 key={conv.id}
-                                onClick={() => {
-                                    setActiveConversationId(conv.id)
-                                    if (onSelect) onSelect(conv.id)
-                                }}
+                                onClick={() => setActiveConversationId(conv.id)}
                                 className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg group transition-all cursor-pointer relative ${activeConversationId === conv.id
                                     ? 'bg-stone-800 text-white shadow-md border border-white/5'
                                     : 'text-stone-400 hover:bg-stone-800/50 hover:text-stone-200'

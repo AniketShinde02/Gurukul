@@ -53,16 +53,28 @@ export function useDm() {
         return () => subscription.unsubscribe()
     }, [])
 
-    // Fetch Conversations
+
+    // Fetch Conversations with deduplication using ref to avoid infinite loops
+    const isFetchingConversationsRef = useRef(false)
     const fetchConversations = useCallback(async () => {
+        // Prevent duplicate requests
+        if (isFetchingConversationsRef.current) {
+            return
+        }
+
+        isFetchingConversationsRef.current = true
         try {
-            const res = await fetch('/api/dm/conversations')
+            const res = await fetch('/api/dm/conversations', {
+                credentials: 'include'
+            })
             const data = await res.json()
             if (data.conversations) {
                 setConversations(data.conversations)
             }
         } catch (error) {
             console.error('Error fetching conversations:', error)
+        } finally {
+            isFetchingConversationsRef.current = false
         }
     }, [])
 
@@ -78,12 +90,22 @@ export function useDm() {
         const fetchMessages = async () => {
             setIsLoading(true)
             try {
-                const res = await fetch(`/api/dm/conversations/${activeConversationId}/messages`)
+                const res = await fetch(`/api/dm/conversations/${activeConversationId}/messages`, {
+                    credentials: 'include'
+                })
+
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`)
+                }
+
                 const data = await res.json()
                 if (data.messages) {
                     setMessages(data.messages)
                     // Mark as read
-                    await fetch(`/api/dm/conversations/${activeConversationId}/read`, { method: 'POST' })
+                    await fetch(`/api/dm/conversations/${activeConversationId}/read`, {
+                        method: 'POST',
+                        credentials: 'include'
+                    })
                 }
             } catch (error) {
                 console.error('Error fetching messages:', error)
@@ -140,6 +162,13 @@ export function useDm() {
     useEffect(() => {
         if (!currentUserId) return
 
+        // Debounce to prevent spam
+        let debounceTimer: NodeJS.Timeout
+        const debouncedFetch = () => {
+            clearTimeout(debounceTimer)
+            debounceTimer = setTimeout(() => fetchConversations(), 500)
+        }
+
         const channel = supabase
             .channel(`dm_list:${currentUserId}`)
             .on(
@@ -148,9 +177,9 @@ export function useDm() {
                     event: '*', // INSERT or UPDATE
                     schema: 'public',
                     table: 'dm_conversations',
-                    filter: `user1_id=eq.${currentUserId}` // Supabase filter limitations mean we might need two listeners or just rely on global refresh
+                    filter: `user1_id=eq.${currentUserId}`
                 },
-                () => fetchConversations()
+                debouncedFetch
             )
             .on(
                 'postgres_changes',
@@ -160,14 +189,15 @@ export function useDm() {
                     table: 'dm_conversations',
                     filter: `user2_id=eq.${currentUserId}`
                 },
-                () => fetchConversations()
+                debouncedFetch
             )
             .subscribe()
 
         return () => {
+            clearTimeout(debounceTimer)
             supabase.removeChannel(channel)
         }
-    }, [currentUserId, fetchConversations])
+    }, [currentUserId]) // Removed fetchConversations from deps
 
     const sendMessage = async (
         content: string,

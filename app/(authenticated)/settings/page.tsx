@@ -15,11 +15,18 @@ import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { toast } from 'react-hot-toast'
 import { motion } from 'framer-motion'
-import Tesseract from 'tesseract.js'
+
+// Lazy load Tesseract only when needed
+let Tesseract: any = null
+const loadTesseract = async () => {
+    if (!Tesseract) {
+        Tesseract = (await import('tesseract.js')).default
+    }
+    return Tesseract
+}
 
 export default function SettingsPage() {
     const router = useRouter()
-    const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [uploading, setUploading] = useState(false)
     const [user, setUser] = useState<any>(null)
@@ -40,61 +47,50 @@ export default function SettingsPage() {
     const [scanning, setScanning] = useState(false)
     const [scanResult, setScanResult] = useState<{ confidence: number, text: string } | null>(null)
 
+    // Parallel data fetching for faster load
     useEffect(() => {
-        fetchProfile()
-        checkVerificationStatus()
+        const loadData = async () => {
+            try {
+                const { data: { user } } = await supabase.auth.getUser()
+                if (!user) {
+                    router.push('/login')
+                    return
+                }
+                setUser(user)
+
+                // Fetch profile and verification status in parallel
+                const [profileResult, verificationResult] = await Promise.all([
+                    supabase.from('profiles').select('*').eq('id', user.id).single(),
+                    supabase.from('verification_requests')
+                        .select('status')
+                        .eq('user_id', user.id)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .single()
+                ])
+
+                if (profileResult.data) {
+                    setProfile({
+                        username: profileResult.data.username || '',
+                        full_name: profileResult.data.full_name || '',
+                        bio: profileResult.data.bio || '',
+                        avatar_url: profileResult.data.avatar_url || '',
+                        website: profileResult.data.website || '',
+                        is_admin: profileResult.data.is_admin || false
+                    })
+                }
+
+                if (verificationResult.data) {
+                    setVerificationStatus(verificationResult.data.status)
+                }
+            } catch (error) {
+                console.error('Error loading data:', error)
+                toast.error('Failed to load profile')
+            }
+        }
+
+        loadData()
     }, [])
-
-    const checkVerificationStatus = async () => {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
-
-        const { data } = await supabase
-            .from('verification_requests')
-            .select('status')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single()
-
-        if (data) {
-            setVerificationStatus(data.status)
-        }
-    }
-
-    const fetchProfile = async () => {
-        try {
-            const { data: { user } } = await supabase.auth.getUser()
-            if (!user) {
-                router.push('/login')
-                return
-            }
-            setUser(user)
-
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', user.id)
-                .single()
-
-            if (error) throw error
-            if (data) {
-                setProfile({
-                    username: data.username || '',
-                    full_name: data.full_name || '',
-                    bio: data.bio || '',
-                    avatar_url: data.avatar_url || '',
-                    website: data.website || '',
-                    is_admin: data.is_admin || false
-                })
-            }
-        } catch (error) {
-            console.error('Error fetching profile:', error)
-            toast.error('Failed to load profile')
-        } finally {
-            setLoading(false)
-        }
-    }
 
     const handleUpdateProfile = async () => {
         setSaving(true)
@@ -178,7 +174,8 @@ export default function SettingsPage() {
         setScanning(true)
         setScanResult(null)
         try {
-            const { data: { text, confidence } } = await Tesseract.recognize(
+            const TesseractLib = await loadTesseract()
+            const { data: { text, confidence } } = await TesseractLib.recognize(
                 file,
                 'eng',
                 // { logger: m => console.log(m) } 
@@ -254,7 +251,6 @@ export default function SettingsPage() {
                 toast.success('🎉 Success! You are now a verified student.')
                 setVerificationStatus('verified')
                 setProfile(prev => ({ ...prev, is_student: true }))
-                fetchProfile()
             } else {
                 toast.error('Your email does not appear to be a valid .edu address.')
             }
@@ -266,17 +262,6 @@ export default function SettingsPage() {
         }
     }
 
-    if (loading) {
-        return (
-            <div className="flex h-screen w-full items-center justify-center bg-stone-950">
-                <div className="flex flex-col items-center gap-4">
-                    <Loader2 className="h-10 w-10 animate-spin text-orange-500" />
-                    <p className="text-sm font-medium text-stone-500 animate-pulse">Loading preferences...</p>
-                </div>
-            </div>
-        )
-    }
-
     // --- RENDER SECTION (Redesigned Layout) ---
     return (
         <div className="min-h-screen bg-transparent text-stone-200 p-4 lg:p-6 flex flex-col items-center justify-center font-sans selection:bg-orange-500/30 selection:text-orange-200">
@@ -284,7 +269,7 @@ export default function SettingsPage() {
             <motion.div
                 initial={{ opacity: 0, scale: 0.98 }}
                 animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.4, ease: "easeOut" }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
                 className="w-full max-w-7xl h-[calc(100vh-120px)] flex flex-col gap-4"
             >
                 {/* Header Area */}

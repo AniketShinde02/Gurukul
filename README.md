@@ -98,6 +98,23 @@ Open [http://localhost:3000](http://localhost:3000) to see the app in action!
 
 ---
 
+## ⚡ Performance & Scalability
+
+**Important**: This app is currently optimized for **<100 concurrent users**. Before scaling to production with thousands of users, please review:
+
+- **[PERFORMANCE_BOTTLENECKS.md](./PERFORMANCE_BOTTLENECKS.md)** - Detailed analysis of scalability issues
+- **[QUICK_FIX_GUIDE.md](./QUICK_FIX_GUIDE.md)** - Step-by-step fixes for critical bottlenecks
+
+### Quick Actions Before Launch:
+
+1. **Add Database Indexes** (5 min) - See QUICK_FIX_GUIDE.md
+2. **Implement Pagination** (30 min) - Prevents data overload
+3. **Add Message Virtualization** (30 min) - Smooth scrolling for long chats
+
+**Estimated Impact**: 10-50x performance improvement
+
+---
+
 ## 🤝 Contributing
 
 We welcome contributions! Please fork the repository and submit a Pull Request.

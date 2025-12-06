@@ -31,24 +31,47 @@ export async function DELETE(
 
         if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-        // Delete the conversation
-        // Note: This usually requires cascading deletes or handling messages first.
-        // For now, we'll assume we just want to remove the conversation record.
-        // If you have foreign key constraints, messages will be deleted automatically or this will fail.
-        // Let's assume cascade delete is ON for messages linked to conversation.
+        // Get the conversation to determine which user is deleting
+        const { data: conversation, error: fetchError } = await supabase
+            .from('dm_conversations')
+            .select('user1_id, user2_id')
+            .eq('id', params.id)
+            .single()
+
+        if (fetchError || !conversation) {
+            return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
+        }
+
+        // Determine which user is deleting
+        const isUser1 = conversation.user1_id === user.id
+        const isUser2 = conversation.user2_id === user.id
+
+        if (!isUser1 && !isUser2) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+        }
+
+        // Set delete timestamp for this user (Discord-style delete)
+        // This marks when the user deleted the chat
+        // They will only see messages AFTER this timestamp
+        const updateData = isUser1
+            ? { deleted_by_user1_at: new Date().toISOString() }
+            : { deleted_by_user2_at: new Date().toISOString() }
 
         const { error } = await supabase
             .from('dm_conversations')
-            .delete()
+            .update(updateData)
             .eq('id', params.id)
-            .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`) // Ensure user is part of it
 
         if (error) {
             console.error('Error deleting conversation:', error)
             return NextResponse.json({ error: 'Failed to delete conversation' }, { status: 500 })
         }
 
-        return NextResponse.json({ success: true })
+        return NextResponse.json({
+            success: true,
+            deleted: true,
+            message: 'Chat deleted. You will only see new messages from now on.'
+        })
 
     } catch (error) {
         console.error('Error in delete conversation route:', error)

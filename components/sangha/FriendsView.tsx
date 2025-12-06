@@ -17,11 +17,13 @@ import {
 
 type Tab = 'online' | 'all' | 'pending' | 'blocked' | 'add_friend'
 
-export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => void, onBack?: () => void }) {
+export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => void | Promise<void>, onBack?: () => void }) {
     const [activeTab, setActiveTab] = useState<Tab>('online')
     const [buddies, setBuddies] = useState<any[]>([])
     const [requests, setRequests] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    const [friendUsername, setFriendUsername] = useState('')
+    const [sendingRequest, setSendingRequest] = useState(false)
     const { startDm } = useDm()
 
     useEffect(() => {
@@ -103,7 +105,12 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
         }
     }
 
-    const handleUnfriend = async (connectionId: string) => {
+    const handleUnfriend = async (connectionId: string, username: string) => {
+        // Confirm before deleting
+        if (!confirm(`Are you sure you want to unfriend ${username}? This will permanently delete your connection and chat history.`)) {
+            return
+        }
+
         try {
             const { error } = await supabase
                 .from('study_connections')
@@ -119,9 +126,78 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
     }
 
     const handleMessage = async (buddyId: string) => {
-        const conversationId = await startDm(buddyId)
-        if (conversationId) {
-            onStartDm(conversationId)
+        // Pass buddyId to parent, which will handle startDm
+        await onStartDm(buddyId)
+    }
+
+    const sendFriendRequest = async () => {
+        if (!friendUsername.trim()) {
+            toast.error('Please enter a username')
+            return
+        }
+
+        setSendingRequest(true)
+        try {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) {
+                toast.error('You must be logged in')
+                return
+            }
+
+            // Find user by username
+            const { data: targetUser, error: userError } = await supabase
+                .from('profiles')
+                .select('id, username')
+                .eq('username', friendUsername.trim())
+                .single()
+
+            if (userError || !targetUser) {
+                toast.error('User not found')
+                return
+            }
+
+            if (targetUser.id === user.id) {
+                toast.error('You cannot add yourself as a friend')
+                return
+            }
+
+            // Check if connection already exists
+            const { data: existing } = await supabase
+                .from('study_connections')
+                .select('id, status')
+                .or(`and(requester_id.eq.${user.id},receiver_id.eq.${targetUser.id}),and(requester_id.eq.${targetUser.id},receiver_id.eq.${user.id})`)
+                .maybeSingle()
+
+            if (existing) {
+                if (existing.status === 'accepted') {
+                    toast.error('You are already friends with this user')
+                } else if (existing.status === 'pending') {
+                    toast.error('Friend request already sent')
+                } else {
+                    toast.error('Connection already exists')
+                }
+                return
+            }
+
+            // Send friend request
+            const { error: insertError } = await supabase
+                .from('study_connections')
+                .insert({
+                    requester_id: user.id,
+                    receiver_id: targetUser.id,
+                    status: 'pending'
+                })
+
+            if (insertError) throw insertError
+
+            toast.success(`Friend request sent to ${targetUser.username}!`)
+            setFriendUsername('')
+
+        } catch (error) {
+            console.error('Error sending friend request:', error)
+            toast.error('Failed to send friend request')
+        } finally {
+            setSendingRequest(false)
         }
     }
 
@@ -169,11 +245,23 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
                             <p className="text-stone-400 text-xs mb-4">You can add friends with their username.</p>
                             <div className="relative">
                                 <Input
-                                    placeholder="You can add friends with their username."
-                                    className="bg-stone-900/50 border-white/10 h-12 text-stone-200 placeholder:text-stone-500 focus:border-orange-500 transition-all rounded-xl"
+                                    value={friendUsername}
+                                    onChange={(e) => setFriendUsername(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !sendingRequest) {
+                                            sendFriendRequest()
+                                        }
+                                    }}
+                                    placeholder="Enter username (e.g., ai.captioncraft)"
+                                    className="bg-stone-900/50 border-white/10 h-12 text-stone-200 placeholder:text-stone-500 focus:border-orange-500 transition-all rounded-xl pr-44"
+                                    disabled={sendingRequest}
                                 />
-                                <Button className="absolute right-1 top-1 h-10 bg-orange-600 hover:bg-orange-700 text-white rounded-lg">
-                                    Send Friend Request
+                                <Button
+                                    onClick={sendFriendRequest}
+                                    disabled={sendingRequest || !friendUsername.trim()}
+                                    className="absolute right-1 top-1 h-10 bg-orange-600 hover:bg-orange-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {sendingRequest ? 'Sending...' : 'Send Friend Request'}
                                 </Button>
                             </div>
 
@@ -270,7 +358,7 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
                                                     <DropdownMenuItem
                                                         onClick={(e) => {
                                                             e.stopPropagation()
-                                                            handleUnfriend(buddy.connectionId)
+                                                            handleUnfriend(buddy.connectionId, buddy.username)
                                                         }}
                                                         className="text-red-400 focus:text-red-400 focus:bg-red-500/10 cursor-pointer gap-2"
                                                     >
