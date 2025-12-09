@@ -204,7 +204,7 @@ export default function DashboardPage() {
                     <div className="space-y-4">
                         {activeRooms.length > 0 ? (
                             activeRooms.map((room) => (
-                                <Link key={room.id} href={`/rooms/${room.id}`}>
+                                <Link key={room.id} href={`/sangha/rooms/${room.id}`}>
                                     <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group cursor-pointer border border-transparent hover:border-white/5">
                                         <div className="w-12 h-12 rounded-lg bg-stone-800 flex flex-col items-center justify-center border border-white/5 text-orange-500">
                                             <Users className="w-5 h-5" />

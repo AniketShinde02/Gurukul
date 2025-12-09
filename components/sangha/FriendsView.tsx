@@ -210,7 +210,7 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
     return (
         <div className="flex-1 flex flex-col bg-transparent min-w-0">
             {/* Header */}
-            <div className="h-12 border-b border-white/5 flex items-center px-6 gap-4 shadow-sm bg-stone-950/40 backdrop-blur-md">
+            <div className="h-12 border-b border-orange-900/20 flex items-center px-6 gap-4 shadow-sm bg-[#1C1917]/80 backdrop-blur-xl">
                 {/* Mobile Back Button */}
                 {onBack && (
                     <button onClick={onBack} className="md:hidden mr-2 text-stone-400 hover:text-white">
@@ -381,7 +381,7 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
                 </div>
 
                 {/* Right Sidebar (Active Now) */}
-                <div className="w-[360px] border-l border-white/5 hidden lg:flex flex-col p-6 bg-stone-950/40 backdrop-blur-md">
+                <div className="w-[360px] border-l border-orange-900/20 hidden lg:flex flex-col p-6 bg-[#1C1917]/60 backdrop-blur-xl">
                     <h2 className="font-bold text-xl text-white mb-6 font-serif">Active Now</h2>
                     <div className="text-center py-10">
                         <p className="text-stone-400 font-bold mb-2">It's quiet for now...</p>
@@ -398,8 +398,8 @@ function TabButton({ active, children, onClick }: { active: boolean, children: R
         <button
             onClick={onClick}
             className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${active
-                ? 'bg-stone-800 text-white shadow-sm border border-white/5'
-                : 'text-stone-400 hover:bg-stone-800/50 hover:text-stone-200'
+                ? 'bg-orange-600/20 text-orange-400 shadow-sm border border-orange-500/30'
+                : 'text-stone-400 hover:bg-orange-500/10 hover:text-orange-400'
                 }`}
         >
             {children}

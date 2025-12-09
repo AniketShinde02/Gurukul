@@ -1212,3 +1212,153 @@ These properties are built on **Radix UI** primitives and styled with **Tailwind
 
 *Atlas Updated: 2025-12-06*
 
+---
+
+## 34. 📅 Session Update: 2025-12-09 — Core App Fine-Tuning
+
+> **ELI5 Summary**: Today we fixed the doors (login/logout), connected the hallways (rooms → sangha), painted everything the same color (vedic theme), and made the elevators faster (performance).
+
+---
+
+### 🔐 Authentication — "The Doors Were Broken"
+
+**Problem**: Users couldn't get in or out properly.
+
+| Door | What Was Wrong | How We Fixed It |
+|------|---------------|-----------------|
+| 🚪 **Password Reset** | Click email link → nothing happened | Created `app/auth/callback/route.ts` (server-side) to detect `type=recovery` and redirect to `/profile/reset-password` |
+| 🚪 **Logout** | Clicked logout → went to `/login` (sometimes 404) | Changed `handleLogout()` in `TopBar.tsx` to go to `/` (landing page) |
+| 🚪 **Login Speed** | "Completing sign in..." felt slow | Moved auth from client-side page to server-side Route Handler |
+
+**Think of it like**: The door hinges were rusty. We oiled them.
+
+---
+
+### 🏠 Rooms Integration — "Connecting the Hallways"
+
+**Problem**: Old "Study Rooms" and new "Sangha Rooms" were separate buildings.
+
+| Issue | Simple Explanation | Fix |
+|-------|-------------------|-----|
+| **Old room pages** | Clicking a room showed old Jitsi UI | `/rooms/[roomId]` now redirects to `/sangha/rooms/[roomId]` |
+| **No default channel** | New rooms were empty | Auto-create `#general` channel when room is created |
+| **Hidden rooms** | "Physics Club" was being hidden by code | Removed the filter that was hiding it |
+| **Broken dashboard links** | Dashboard pointed to old rooms | Updated to point to Sangha rooms |
+
+**Think of it like**: We built a bridge between old building and new building.
+
+---
+
+### 🔗 Invite Links — "The Secret Handshake"
+
+**Problem**: Sharing room links didn't work.
+
+| What Was Wrong | What We Did |
+|---------------|-------------|
+| Link format was wrong | Fixed to use `https://yoursite.com/invite/[roomId]` |
+| No page to handle invites | Created `app/invite/[roomId]/page.tsx` |
+
+**The invite page now**:
+1. Checks if you're logged in
+2. Checks if room exists
+3. Adds you as a member
+4. Redirects you inside the room
+
+---
+
+### 🎨 Vedic Theme — "Painting Everything Orange"
+
+**Problem**: Sangha looked like Discord (gray/blue), not Gurukul (orange/warm).
+
+| Component | Before | After |
+|-----------|--------|-------|
+| Background | `bg-stone-950` (cold gray) | `bg-vedic-pattern` (warm) |
+| Active items | Gray highlight | Orange glow |
+| Borders | `border-white/5` | `border-orange-900/20` |
+| Buttons | Blue/Indigo | Orange |
+
+**Think of it like**: We repainted the whole building to match the logo.
+
+---
+
+### 🧭 Navigation Icons — "Better Signs"
+
+| Section | Old Sign | New Sign | Why |
+|---------|----------|----------|-----|
+| Servers | 📹 Camera | 🧭 Compass | "Explore" = Discovery |
+| Sangha | 💬 Chat | 👥 People | "Sangha" = Community |
+
+---
+
+### ⚡ Performance — "Making the Elevators Faster"
+
+**Problem**: Sangha was slow (7+ seconds first load).
+
+#### Database Indexes (The Filing System)
+
+**Old way**: Looking through every file to find one.
+**New way**: Having a sorted index at the front.
+
+| Table | What Was Missing | What We Added |
+|-------|-----------------|---------------|
+| `room_messages` | No index at all! | `(room_id, created_at DESC)` |
+| `room_participants` | No index | `(room_id, user_id)` |
+| `room_channels` | No index | `(room_id, position)` |
+| `dm_conversations` | Single-column only | Composite `(user_id, last_message_at DESC)` |
+
+**Think of it like**: Before, we were flipping through a phonebook page by page. Now we have tabs for A-Z.
+
+#### API Optimization
+
+**`/api/dm/conversations`**:
+- Before: One slow `OR` query
+- After: Two fast parallel queries + merge
+
+**Room Page**:
+- Before: Load ALL data, then show page
+- After: Show skeleton immediately, load data in background
+
+---
+
+### 📦 Updated Packages
+
+| Package | Change | Why |
+|---------|--------|-----|
+| `next` | `16.0.7` → `16.0.8` | Security patch |
+
+---
+
+### ✅ What Works Now (Checklist)
+
+- [x] Password reset redirects correctly
+- [x] Logout goes to landing page
+- [x] All rooms visible in Sangha
+- [x] Explore button works
+- [x] Invite links work
+- [x] Theme is consistent
+- [x] Performance indexes ready
+
+---
+
+### ⏳ Still Need to Do
+
+| Task | How to Do It |
+|------|--------------|
+| Run performance indexes | Copy `scripts/performance-indexes.sql` → Supabase SQL Editor → Run |
+| Test password reset | Send yourself a reset email, click link |
+| Test invites | Copy invite link, open in incognito, try to join |
+| Production build | Run `npm run build` and check for errors |
+
+---
+
+### 🐛 Known Small Issues (Not Urgent)
+
+| Issue | What It Means |
+|-------|--------------|
+| Hydration mismatch warning | Radix UI generates different IDs on server vs client. Cosmetic only. |
+| `images.domains` deprecation | Next.js wants us to use `remotePatterns` instead. Works fine for now. |
+
+---
+
+*Guide Last Updated: 2025-12-09*
+

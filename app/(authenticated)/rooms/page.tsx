@@ -3,9 +3,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Video, Plus, Users, Search, Lock, Globe, Loader2, ArrowRight, Sparkles } from 'lucide-react'
+import { Flame, Plus, Users, Search, Lock, Globe, Loader2, ArrowRight, Sparkles, Hash, X, Compass, MessageSquare, Crown } from 'lucide-react'
 import { toast } from 'react-hot-toast'
-import { formatDistanceToNow } from 'date-fns'
 
 type Room = {
     id: string
@@ -18,6 +17,8 @@ type Room = {
     tags: string[]
     created_at: string
     created_by: string
+    icon_url?: string
+    participant_count?: number
 }
 
 export default function RoomsPage() {
@@ -33,7 +34,7 @@ export default function RoomsPage() {
         topic: '',
         description: '',
         type: 'public',
-        max_participants: 10,
+        max_participants: 100,
         tags: ''
     })
     const [creating, setCreating] = useState(false)
@@ -74,7 +75,6 @@ export default function RoomsPage() {
             setRooms(data || [])
         } catch (error) {
             console.error('Error fetching rooms:', error)
-            // toast.error('Failed to load rooms') // Suppress error if table doesn't exist yet
         } finally {
             setLoading(false)
         }
@@ -108,19 +108,36 @@ export default function RoomsPage() {
                 .select()
                 .single()
 
+            if (data) {
+                // Create default 'General' channel
+                await supabase.from('room_channels').insert({
+                    room_id: data.id,
+                    name: 'general',
+                    type: 'text',
+                    position: 0
+                })
+
+                // Add creator as owner participant
+                await supabase.from('room_participants').insert({
+                    room_id: data.id,
+                    user_id: user.id,
+                    role: 'owner'
+                })
+            }
+
             if (error) throw error
 
-            toast.success('Room created successfully!')
+            toast.success('Server created successfully!')
             setIsCreateModalOpen(false)
-            setNewRoom({ name: '', topic: '', description: '', type: 'public', max_participants: 10, tags: '' })
+            setNewRoom({ name: '', topic: '', description: '', type: 'public', max_participants: 100, tags: '' })
 
             // Navigate to the new room
             if (data) {
-                router.push(`/rooms/${data.id}`)
+                router.push(`/sangha/rooms/${data.id}`)
             }
         } catch (error) {
             console.error('Error creating room:', error)
-            toast.error('Failed to create room')
+            toast.error('Failed to create server')
         } finally {
             setCreating(false)
         }
@@ -129,37 +146,52 @@ export default function RoomsPage() {
     const filteredRooms = rooms.filter(room =>
         room.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         room.topic.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        room.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+        room.tags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
     )
 
     return (
         <div className="space-y-8 pb-20">
-            {/* Header Section */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-4xl font-heading font-bold text-white mb-2">Study Rooms</h1>
-                    <p className="text-stone-400 text-lg">Join a virtual ashram or create your own space for learning.</p>
+            {/* Hero Header */}
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-orange-900/30 via-stone-900/50 to-stone-900/30 border border-white/5 p-8 md:p-12">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
+
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div>
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-900/30">
+                                <Compass className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-3xl md:text-4xl font-heading font-bold text-white">Explore Servers</h1>
+                                <p className="text-stone-400 text-sm">Discover and join learning communities</p>
+                            </div>
+                        </div>
+                        <p className="text-stone-300 text-lg max-w-xl">
+                            Find your tribe of learners. Join public servers, collaborate on topics, and grow together.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-8 py-4 rounded-2xl font-bold shadow-lg shadow-orange-900/30 flex items-center gap-3 transition-all hover:scale-105 active:scale-95 group whitespace-nowrap"
+                    >
+                        <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
+                        <span>Create Server</span>
+                    </button>
                 </div>
-                <button
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="bg-orange-600 hover:bg-orange-700 text-white px-8 py-4 rounded-2xl font-bold shadow-lg shadow-orange-900/20 flex items-center space-x-2 transition-all hover:scale-105 active:scale-95 group"
-                >
-                    <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
-                    <span>Create Room</span>
-                </button>
             </div>
 
-            {/* Search & Filter */}
+            {/* Search Bar */}
             <div className="relative group">
-                <div className="absolute inset-0 bg-orange-500/5 rounded-2xl blur-xl group-hover:bg-orange-500/10 transition-colors" />
-                <div className="relative">
-                    <Search className="absolute left-5 top-4 w-5 h-5 text-stone-500 group-focus-within:text-orange-500 transition-colors" />
+                <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-indigo-500/5 rounded-2xl blur-xl group-focus-within:from-orange-500/10 group-focus-within:to-indigo-500/10 transition-colors" />
+                <div className="relative flex items-center">
+                    <Search className="absolute left-5 w-5 h-5 text-stone-500 group-focus-within:text-orange-500 transition-colors" />
                     <input
                         type="text"
-                        placeholder="Search by name, topic, or tags..."
+                        placeholder="Search servers by name, topic, or tags..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 rounded-2xl pl-14 pr-6 py-4 text-white placeholder:text-stone-500 focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/20 focus:outline-none transition-all backdrop-blur-md"
+                        className="w-full bg-stone-900/80 border border-white/10 rounded-2xl pl-14 pr-6 py-4 text-white placeholder:text-stone-500 focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/20 focus:outline-none transition-all backdrop-blur-md"
                     />
                 </div>
             </div>
@@ -172,155 +204,205 @@ export default function RoomsPage() {
             ) : filteredRooms.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredRooms.map((room) => (
-                        <div key={room.id} className="bg-black/40 border border-white/5 rounded-3xl overflow-hidden hover:border-orange-500/30 transition-all group flex flex-col backdrop-blur-md relative">
-                            <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-
-                            <div className="p-6 flex-1 relative z-10">
-                                <div className="flex justify-between items-start mb-4">
-                                    <span className="px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-500 text-[10px] font-bold uppercase tracking-wider">
-                                        {room.topic}
-                                    </span>
+                        <div
+                            key={room.id}
+                            className="group relative bg-stone-900/60 border border-white/5 rounded-2xl overflow-hidden hover:border-orange-500/30 transition-all duration-300 hover:shadow-xl hover:shadow-orange-900/10 cursor-pointer"
+                            onClick={() => router.push(`/sangha/rooms/${room.id}`)}
+                        >
+                            {/* Card Header with Icon */}
+                            <div className="p-6 pb-4">
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-12 h-12 rounded-xl bg-stone-800 border border-white/10 flex items-center justify-center overflow-hidden group-hover:border-orange-500/30 transition-colors">
+                                            {room.icon_url ? (
+                                                <img src={room.icon_url} alt={room.name} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <Hash className="w-6 h-6 text-orange-500" />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-bold text-white group-hover:text-orange-500 transition-colors line-clamp-1">
+                                                {room.name}
+                                            </h3>
+                                            <span className="text-xs text-stone-500 uppercase tracking-wider font-medium">
+                                                {room.topic || 'General'}
+                                            </span>
+                                        </div>
+                                    </div>
                                     {room.type === 'private' ? (
                                         <Lock className="w-4 h-4 text-stone-500" />
                                     ) : (
-                                        <Globe className="w-4 h-4 text-stone-500" />
+                                        <Globe className="w-4 h-4 text-green-500" />
                                     )}
                                 </div>
-                                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-orange-500 transition-colors line-clamp-1">{room.name}</h3>
-                                <p className="text-stone-400 text-sm mb-6 line-clamp-2 leading-relaxed">{room.description || 'No description provided.'}</p>
 
-                                <div className="flex flex-wrap gap-2">
-                                    {room.tags?.slice(0, 3).map((tag, i) => (
-                                        <span key={i} className="text-[10px] text-stone-400 bg-white/5 px-2.5 py-1 rounded-lg border border-white/5">
+                                <p className="text-stone-400 text-sm line-clamp-2 leading-relaxed min-h-[40px]">
+                                    {room.description || 'No description provided.'}
+                                </p>
+                            </div>
+
+                            {/* Tags */}
+                            {room.tags && room.tags.length > 0 && (
+                                <div className="px-6 pb-4 flex flex-wrap gap-2">
+                                    {room.tags.slice(0, 3).map((tag, i) => (
+                                        <span key={i} className="text-[10px] text-stone-400 bg-stone-800/80 px-2.5 py-1 rounded-lg border border-white/5">
                                             #{tag}
                                         </span>
                                     ))}
                                 </div>
-                            </div>
+                            )}
 
-                            <div className="p-4 bg-black/20 border-t border-white/5 flex items-center justify-between relative z-10">
-                                <div className="flex items-center space-x-2 text-stone-400 text-xs font-medium">
-                                    <Users className="w-4 h-4" />
-                                    <span>{room.current_participants} / {room.max_participants}</span>
+                            {/* Footer */}
+                            <div className="px-6 py-4 bg-stone-900/50 border-t border-white/5 flex items-center justify-between">
+                                <div className="flex items-center gap-4 text-stone-400 text-xs">
+                                    <div className="flex items-center gap-1.5">
+                                        <Users className="w-3.5 h-3.5" />
+                                        <span>{room.participant_count || room.current_participants || 0} members</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <MessageSquare className="w-3.5 h-3.5" />
+                                        <span>Active</span>
+                                    </div>
                                 </div>
-                                <button
-                                    onClick={() => router.push(`/rooms/${room.id}`)}
-                                    className="text-white text-sm font-bold flex items-center space-x-1 hover:text-orange-500 transition-colors group/btn"
-                                >
-                                    <span>Join Room</span>
-                                    <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                                <button className="text-orange-500 text-sm font-bold flex items-center gap-1 group-hover:gap-2 transition-all">
+                                    <span>Join</span>
+                                    <ArrowRight className="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
                     ))}
                 </div>
             ) : (
-                <div className="text-center py-24 bg-black/20 rounded-3xl border border-white/5 border-dashed backdrop-blur-sm">
+                <div className="text-center py-24 bg-stone-900/30 rounded-3xl border border-white/5 border-dashed backdrop-blur-sm">
                     <div className="w-20 h-20 bg-stone-800/50 rounded-full flex items-center justify-center mx-auto mb-6">
                         <Sparkles className="w-10 h-10 text-stone-600" />
                     </div>
-                    <h3 className="text-2xl font-bold text-white mb-2">No active rooms</h3>
-                    <p className="text-stone-400 mb-8 max-w-sm mx-auto">Be the first to start a study session and invite others to join.</p>
+                    <h3 className="text-2xl font-bold text-white mb-2">No servers found</h3>
+                    <p className="text-stone-400 mb-8 max-w-sm mx-auto">Be the first to create a learning community and invite others to join.</p>
                     <button
                         onClick={() => setIsCreateModalOpen(true)}
                         className="text-orange-500 font-bold hover:text-orange-400 transition-colors flex items-center justify-center gap-2 mx-auto"
                     >
                         <Plus className="w-5 h-5" />
-                        Create a Room
+                        Create a Server
                     </button>
                 </div>
             )}
 
             {/* Create Room Modal */}
             {isCreateModalOpen && (
-                <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <div className="bg-[#1C1917] w-full max-w-lg rounded-3xl border border-white/10 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 relative">
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    onClick={() => setIsCreateModalOpen(false)}
+                >
+                    {/* Backdrop with blur */}
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+                    {/* Modal */}
+                    <div
+                        className="relative bg-stone-900 w-full max-w-lg rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         {/* Modal Header */}
-                        <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
-                            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                <Video className="w-5 h-5 text-orange-500" />
-                                Create New Room
-                            </h2>
-                            <button onClick={() => setIsCreateModalOpen(false)} className="text-stone-400 hover:text-white transition-colors">
-                                <Plus className="w-6 h-6 rotate-45" />
+                        <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
+                                    <Flame className="w-5 h-5 text-white" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-white">Create Your Server</h2>
+                                    <p className="text-xs text-stone-500">Build a community for your learners</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setIsCreateModalOpen(false)}
+                                className="w-8 h-8 rounded-lg hover:bg-white/5 flex items-center justify-center text-stone-400 hover:text-white transition-colors"
+                            >
+                                <X className="w-5 h-5" />
                             </button>
                         </div>
 
-                        <form onSubmit={handleCreateRoom} className="p-8 space-y-6">
+                        <form onSubmit={handleCreateRoom} className="p-6 space-y-5">
+                            {/* Server Name */}
                             <div>
-                                <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Room Name</label>
+                                <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">
+                                    Server Name <span className="text-orange-500">*</span>
+                                </label>
                                 <input
                                     type="text"
                                     required
                                     value={newRoom.name}
                                     onChange={(e) => setNewRoom({ ...newRoom, name: e.target.value })}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 focus:outline-none transition-all text-sm placeholder:text-stone-600"
-                                    placeholder="e.g. UPSC Late Night Study"
+                                    className="w-full bg-stone-800/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 focus:outline-none transition-all text-sm placeholder:text-stone-600"
+                                    placeholder="e.g. UPSC Warriors, JEE Study Group"
                                 />
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Topic</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        value={newRoom.topic}
-                                        onChange={(e) => setNewRoom({ ...newRoom, topic: e.target.value })}
-                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 focus:outline-none transition-all text-sm placeholder:text-stone-600"
-                                        placeholder="e.g. History"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Max Participants</label>
-                                    <input
-                                        type="number"
-                                        min="2"
-                                        max="50"
-                                        value={newRoom.max_participants}
-                                        onChange={(e) => setNewRoom({ ...newRoom, max_participants: parseInt(e.target.value) })}
-                                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 focus:outline-none transition-all text-sm"
-                                    />
-                                </div>
+                            {/* Topic */}
+                            <div>
+                                <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">
+                                    Topic / Category <span className="text-orange-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={newRoom.topic}
+                                    onChange={(e) => setNewRoom({ ...newRoom, topic: e.target.value })}
+                                    className="w-full bg-stone-800/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 focus:outline-none transition-all text-sm placeholder:text-stone-600"
+                                    placeholder="e.g. Science, History, Coding"
+                                />
                             </div>
 
+                            {/* Description */}
                             <div>
-                                <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Description</label>
+                                <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">
+                                    Description
+                                </label>
                                 <textarea
                                     rows={3}
                                     value={newRoom.description}
                                     onChange={(e) => setNewRoom({ ...newRoom, description: e.target.value })}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 focus:outline-none transition-all text-sm resize-none placeholder:text-stone-600"
-                                    placeholder="What will you be studying?"
+                                    className="w-full bg-stone-800/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 focus:outline-none transition-all text-sm resize-none placeholder:text-stone-600"
+                                    placeholder="What is this server about? Who should join?"
                                 />
                             </div>
 
+                            {/* Tags */}
                             <div>
-                                <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-2">Tags (comma separated)</label>
+                                <label className="block text-xs font-bold text-stone-400 uppercase tracking-wider mb-2">
+                                    Tags <span className="text-stone-600">(comma separated)</span>
+                                </label>
                                 <input
                                     type="text"
                                     value={newRoom.tags}
                                     onChange={(e) => setNewRoom({ ...newRoom, tags: e.target.value })}
-                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3.5 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 focus:outline-none transition-all text-sm placeholder:text-stone-600"
-                                    placeholder="e.g. silent, focus, pomodoro"
+                                    className="w-full bg-stone-800/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500/20 focus:outline-none transition-all text-sm placeholder:text-stone-600"
+                                    placeholder="e.g. study, focus, pomodoro, late-night"
                                 />
                             </div>
 
+                            {/* Actions */}
                             <div className="pt-4 flex gap-3">
                                 <button
                                     type="button"
                                     onClick={() => setIsCreateModalOpen(false)}
-                                    className="flex-1 py-3.5 rounded-xl border border-white/10 text-stone-400 hover:bg-white/5 hover:text-white font-bold transition-colors"
+                                    className="flex-1 py-3 rounded-xl border border-white/10 text-stone-400 hover:bg-white/5 hover:text-white font-medium transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={creating}
-                                    className="flex-1 py-3.5 rounded-xl bg-orange-600 text-white hover:bg-orange-700 font-bold shadow-lg shadow-orange-900/20 flex items-center justify-center space-x-2 transition-all hover:scale-105 active:scale-95"
+                                    disabled={creating || !newRoom.name || !newRoom.topic}
+                                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 font-bold shadow-lg shadow-orange-900/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {creating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Video className="w-5 h-5" />}
-                                    <span>Create Room</span>
+                                    {creating ? (
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                    ) : (
+                                        <>
+                                            <Crown className="w-4 h-4" />
+                                            <span>Create Server</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </form>

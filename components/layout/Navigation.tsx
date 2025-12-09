@@ -1,6 +1,6 @@
 'use client'
 
-import { LayoutDashboard, Users, Video, BookOpen, Settings, MessageCircle, Trophy } from 'lucide-react'
+import { LayoutDashboard, Users, Compass, BookOpen, Settings, UsersRound, Trophy } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -8,8 +8,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 const navItems = [
     { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
     { label: 'Study Match', icon: Users, href: '/chat' },
-    { label: 'Study Rooms', icon: Video, href: '/rooms' },
-    { label: 'Sangha', icon: MessageCircle, href: '/sangha' },
+    { label: 'Explore Servers', icon: Compass, href: '/rooms' },
+    { label: 'Sangha', icon: UsersRound, href: '/sangha' },
     { label: 'Leaderboard', icon: Trophy, href: '/leaderboard' },
     { label: 'Resources', icon: BookOpen, href: '/resources' },
     { label: 'Settings', icon: Settings, href: '/settings' },

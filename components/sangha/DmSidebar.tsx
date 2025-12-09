@@ -29,7 +29,7 @@ export function DmSidebar({ dmState }: DmSidebarProps) {
     )
 
     return (
-        <div className="w-full h-full bg-stone-950/40 backdrop-blur-md flex flex-col border-r border-white/5 select-none">
+        <div className="w-full h-full bg-[#1C1917]/80 backdrop-blur-xl flex flex-col border-r border-orange-900/20 select-none">
             {/* Search Header */}
             <div className="p-3 shadow-sm z-10">
                 <button className="w-full text-left text-stone-400 text-xs px-2 py-1 mb-2 hover:text-stone-200 transition-colors font-medium">
@@ -40,7 +40,7 @@ export function DmSidebar({ dmState }: DmSidebarProps) {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search"
-                        className="bg-stone-900/50 border-white/5 text-stone-200 placeholder:text-stone-500 h-8 text-sm focus:border-orange-500/50 transition-all"
+                        className="bg-[#0C0A09]/60 border-orange-900/20 text-stone-200 placeholder:text-stone-500 h-8 text-sm focus:border-orange-500/50 transition-all"
                     />
                 </div>
             </div>
@@ -50,8 +50,8 @@ export function DmSidebar({ dmState }: DmSidebarProps) {
                 <button
                     onClick={() => setActiveConversationId(null)}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${!activeConversationId
-                        ? 'bg-stone-800 text-white shadow-md border border-white/5'
-                        : 'text-stone-400 hover:bg-stone-800/50 hover:text-stone-200'
+                        ? 'bg-orange-600/20 text-orange-400 shadow-md border border-orange-500/30'
+                        : 'text-stone-400 hover:bg-orange-500/10 hover:text-orange-400'
                         }`}
                 >
                     <div className="w-6 h-6 flex items-center justify-center">
@@ -73,8 +73,8 @@ export function DmSidebar({ dmState }: DmSidebarProps) {
                                 key={conv.id}
                                 onClick={() => setActiveConversationId(conv.id)}
                                 className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg group transition-all cursor-pointer relative ${activeConversationId === conv.id
-                                    ? 'bg-stone-800 text-white shadow-md border border-white/5'
-                                    : 'text-stone-400 hover:bg-stone-800/50 hover:text-stone-200'
+                                    ? 'bg-orange-600/20 text-white shadow-md border border-orange-500/30'
+                                    : 'text-stone-400 hover:bg-orange-500/10 hover:text-stone-200'
                                     }`}
                             >
                                 <div className="relative">
@@ -134,7 +134,7 @@ export function DmSidebar({ dmState }: DmSidebarProps) {
             </div>
 
             {/* User Profile (Bottom) */}
-            <div className="h-[52px] bg-stone-950/60 flex items-center px-2 gap-2 border-t border-white/5">
+            <div className="h-[52px] bg-[#0C0A09]/60 flex items-center px-2 gap-2 border-t border-orange-900/20">
                 <div className="flex-1 flex items-center gap-2 hover:bg-white/5 p-1 rounded-lg cursor-pointer transition-colors">
                     <Avatar className="w-8 h-8 border border-white/10">
                         <AvatarFallback className="bg-orange-600 text-white text-xs">ME</AvatarFallback>

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { X, Mail, Lock, ArrowLeft } from 'lucide-react'
 import { toast } from 'react-hot-toast'
@@ -14,6 +15,7 @@ interface AuthModalProps {
 type AuthView = 'signin' | 'signup' | 'forgot_password'
 
 export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }: AuthModalProps) {
+    const router = useRouter()
     const [isLoading, setIsLoading] = useState(false)
     const [view, setView] = useState<AuthView>(initialMode)
 
@@ -67,6 +69,7 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }: A
                 if (error) throw error
                 toast.success('Welcome back!')
                 onClose()
+                router.push('/dashboard')
             } else if (view === 'forgot_password') {
                 console.log('Resetting password for:', email)
                 const { error } = await supabase.auth.resetPasswordForEmail(email, {

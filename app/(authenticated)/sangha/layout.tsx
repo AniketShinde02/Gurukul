@@ -128,7 +128,6 @@ export default function SanghaLayout({
             .from('study_rooms')
             .select('*')
             .eq('is_active', true)
-            .neq('name', 'Physics Club')
             .order('created_at', { ascending: true })
 
         let finalRooms = roomsData || []
@@ -183,7 +182,7 @@ export default function SanghaLayout({
     }, [fetchRooms])
 
     const handleInvite = (roomId: string) => {
-        const link = `${window.location.origin}/invite/${roomId}`
+        const link = `${window.location.protocol}//${window.location.host}/invite/${roomId}`
         navigator.clipboard.writeText(link)
         toast.success('Invite link copied!')
         setContextMenu(null)
@@ -208,9 +207,9 @@ export default function SanghaLayout({
 
     return (
         <GlobalCallManager username={username}>
-            <div className="flex h-screen bg-stone-950 text-stone-200 font-sans selection:bg-orange-500/30">
+            <div className="flex h-screen bg-[var(--bg-root)] bg-vedic-pattern text-stone-200 font-sans selection:bg-orange-500/30">
                 {/* 1. Server Rail */}
-                <div className="hidden md:flex w-[72px] flex-col items-center py-3 gap-2 bg-stone-900 border-r border-white/5 z-50">
+                <div className="hidden md:flex w-[72px] flex-col items-center py-3 gap-2 bg-[#1C1917]/90 backdrop-blur-xl border-r border-orange-900/20 z-50">
                     {/* Main Dashboard Button */}
                     <TooltipProvider>
                         <Tooltip>
@@ -412,12 +411,15 @@ export default function SanghaLayout({
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <button className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-stone-800/30 text-orange-500 hover:bg-orange-600 hover:text-white flex items-center justify-center transition-all duration-200 group border border-dashed border-stone-700 hover:border-transparent">
+                                    <Link
+                                        href="/rooms"
+                                        className="w-12 h-12 rounded-[24px] hover:rounded-[16px] bg-stone-800/30 text-orange-500 hover:bg-orange-600 hover:text-white flex items-center justify-center transition-all duration-200 group border border-dashed border-stone-700 hover:border-transparent"
+                                    >
                                         <Compass className="w-5 h-5" />
-                                    </button>
+                                    </Link>
                                 </TooltipTrigger>
                                 <TooltipContent side="right" className="bg-stone-900 border-white/10 text-white">
-                                    <p>Explore Public Rooms</p>
+                                    <p>Explore Servers</p>
                                 </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
@@ -425,7 +427,7 @@ export default function SanghaLayout({
                 </div>
 
                 {/* 2. Main Content Area */}
-                <div className="flex-1 flex overflow-hidden bg-stone-950/30 backdrop-blur-sm">
+                <div className="flex-1 flex overflow-hidden bg-transparent">
                     {children}
                 </div>
             </div>

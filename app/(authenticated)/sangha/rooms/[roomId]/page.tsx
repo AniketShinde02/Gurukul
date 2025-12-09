@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback, memo } from 'react'
+import { useState, useEffect, useMemo, useCallback, memo, Suspense } from 'react'
 import { useParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/lib/supabase/client'
-import { RoomSidebar } from '@/components/sangha/RoomSidebar'
-import { Video, Menu, Users, Check, X } from 'lucide-react'
+import { Video, Menu, Users } from 'lucide-react'
 import {
     Sheet,
     SheetContent,
@@ -14,9 +13,14 @@ import {
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 
-// Dynamic imports for heavy components (Next.js way)
+// Dynamic imports for heavy components - load only when needed
+const RoomSidebar = dynamic(() => import('@/components/sangha/RoomSidebar').then(mod => mod.RoomSidebar), {
+    loading: () => <SidebarSkeleton />,
+    ssr: false
+})
+
 const RoomChatArea = dynamic(() => import('@/components/sangha/RoomChatArea').then(mod => mod.RoomChatArea), {
-    loading: () => <LoadingSpinner />,
+    loading: () => <ContentSkeleton />,
     ssr: false
 })
 
@@ -26,73 +30,93 @@ const RoomInfoSidebar = dynamic(() => import('@/components/sangha/RoomInfoSideba
 })
 
 const VideoRoom = dynamic(() => import('@/components/sangha/VideoRoom').then(mod => mod.VideoRoom), {
-    loading: () => <LoadingSpinner />,
+    loading: () => <ContentSkeleton />,
     ssr: false
 })
 
 const Whiteboard = dynamic(() => import('@/components/sangha/Whiteboard').then(mod => mod.Whiteboard), {
-    loading: () => <LoadingSpinner />,
+    loading: () => <ContentSkeleton />,
     ssr: false
 })
 
-// Loading fallback
-function LoadingSpinner() {
+// Lightweight skeleton components
+function SidebarSkeleton() {
     return (
-        <div className="flex items-center justify-center h-full">
+        <div className="w-60 bg-[#1C1917]/80 border-r border-orange-900/20 flex flex-col animate-pulse">
+            <div className="h-14 border-b border-white/5 px-4 flex items-center">
+                <div className="h-4 bg-stone-800 rounded w-32" />
+            </div>
+            <div className="flex-1 p-2 space-y-2">
+                {[...Array(5)].map((_, i) => (
+                    <div key={i} className="h-8 bg-stone-800/50 rounded-lg" />
+                ))}
+            </div>
+        </div>
+    )
+}
+
+function ContentSkeleton() {
+    return (
+        <div className="flex-1 flex items-center justify-center bg-transparent">
             <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
         </div>
     )
 }
 
+// Minimal room data type
+type RoomBasic = {
+    id: string
+    name: string
+    icon_url?: string
+    banner_url?: string
+}
+
 export default function RoomPage() {
     const params = useParams()
     const roomId = params.roomId as string
-    const [room, setRoom] = useState<any>(null)
+    const router = useRouter()
+
+    // Core state - minimal for fast initial render
+    const [room, setRoom] = useState<RoomBasic | null>(null)
     const [activeChannel, setActiveChannel] = useState<'text' | 'voice' | 'canvas' | 'video' | 'image'>('text')
     const [loading, setLoading] = useState(true)
     const [currentUser, setCurrentUser] = useState<{ id: string, username: string } | null>(null)
+
+    // Deferred state - loaded after initial render
     const [isJoinedVideo, setIsJoinedVideo] = useState(false)
     const [showChat, setShowChat] = useState(false)
     const [showJoinScreen, setShowJoinScreen] = useState(false)
     const [memberCount, setMemberCount] = useState(0)
-    const router = useRouter()
 
+    // Fast initial load - only essential data
     useEffect(() => {
-        const fetchRoomAndUser = async () => {
+        const loadEssentials = async () => {
             try {
-                // Parallel queries for faster loading
-                const [roomResult, userResult, countResult] = await Promise.all([
-                    supabase.from('study_rooms').select('*').eq('id', roomId).single(),
-                    supabase.auth.getUser(),
-                    supabase.from('room_participants').select('*', { count: 'exact', head: true }).eq('room_id', roomId)
+                // Single parallel fetch for critical data only
+                const [roomResult, userResult] = await Promise.all([
+                    supabase
+                        .from('study_rooms')
+                        .select('id, name, icon_url, banner_url')
+                        .eq('id', roomId)
+                        .single(),
+                    supabase.auth.getUser()
                 ])
 
                 if (roomResult.data) {
                     setRoom(roomResult.data)
                 }
 
-                if (countResult.count !== null) {
-                    setMemberCount(countResult.count)
-                }
-
                 if (userResult.data.user) {
                     const user = userResult.data.user
 
-                    // Parallel queries for profile and participant
-                    const [profileResult, participantResult] = await Promise.all([
-                        supabase.from('users').select('username').eq('id', user.id).single(),
-                        supabase.from('room_participants').select('*').eq('room_id', roomId).eq('user_id', user.id).single()
-                    ])
-
+                    // Get username from email as fallback (fast)
                     setCurrentUser({
                         id: user.id,
-                        username: profileResult.data?.username || user.email?.split('@')[0] || 'User'
+                        username: user.email?.split('@')[0] || 'User'
                     })
 
-                    // If NOT a participant, show join screen
-                    if (!participantResult.data) {
-                        setShowJoinScreen(true)
-                    }
+                    // Defer membership check - don't block render
+                    checkMembership(user.id)
                 }
             } catch (error) {
                 console.error('Error loading room:', error)
@@ -100,10 +124,44 @@ export default function RoomPage() {
                 setLoading(false)
             }
         }
-        fetchRoomAndUser()
+
+        loadEssentials()
     }, [roomId])
 
-    // Memoized callbacks to prevent re-renders
+    // Deferred: Check membership and load member count
+    const checkMembership = async (userId: string) => {
+        const [participantResult, countResult, profileResult] = await Promise.all([
+            supabase
+                .from('room_participants')
+                .select('user_id')
+                .eq('room_id', roomId)
+                .eq('user_id', userId)
+                .single(),
+            supabase
+                .from('room_participants')
+                .select('*', { count: 'exact', head: true })
+                .eq('room_id', roomId),
+            supabase
+                .from('profiles')
+                .select('username')
+                .eq('id', userId)
+                .single()
+        ])
+
+        if (countResult.count !== null) {
+            setMemberCount(countResult.count)
+        }
+
+        if (profileResult.data?.username) {
+            setCurrentUser(prev => prev ? { ...prev, username: profileResult.data.username } : null)
+        }
+
+        if (!participantResult.data) {
+            setShowJoinScreen(true)
+        }
+    }
+
+    // Memoized callbacks
     const handleChannelSelect = useCallback((channel: 'text' | 'voice' | 'canvas' | 'video' | 'image') => {
         setActiveChannel(channel)
     }, [])
@@ -124,15 +182,12 @@ export default function RoomPage() {
         if (!currentUser || !room) return
 
         try {
-            const { error } = await supabase.from('room_participants').insert({
+            await supabase.from('room_participants').insert({
                 room_id: roomId,
                 user_id: currentUser.id
             })
-
-            if (error) throw error
-
-            // Reload to refresh state and sidebar
-            window.location.reload()
+            setShowJoinScreen(false)
+            setMemberCount(prev => prev + 1)
         } catch (error) {
             console.error('Error joining room:', error)
         }
@@ -142,13 +197,14 @@ export default function RoomPage() {
         router.push('/sangha')
     }
 
-    // Memoized room name to prevent unnecessary re-renders
     const roomName = useMemo(() => room?.name || '', [room?.name])
 
+    // Fast loading state with skeleton
     if (loading) {
         return (
-            <div className="flex-1 bg-transparent flex items-center justify-center text-stone-500">
-                <LoadingSpinner />
+            <div className="flex-1 flex overflow-hidden">
+                <SidebarSkeleton />
+                <ContentSkeleton />
             </div>
         )
     }
@@ -163,47 +219,36 @@ export default function RoomPage() {
 
     if (showJoinScreen) {
         return (
-            <div className="flex-1 flex items-center justify-center bg-[#313338] relative overflow-hidden">
-                {/* Background Pattern */}
-                <div className="absolute inset-0 opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] brightness-100 contrast-150"></div>
+            <div className="flex-1 flex items-center justify-center bg-[var(--bg-root)] bg-vedic-pattern relative overflow-hidden">
+                <div className="absolute inset-0 opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] brightness-100 contrast-150" />
 
-                {/* Floating Elements Animation */}
                 <motion.div
                     animate={{ y: [0, -20, 0] }}
                     transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                    className="absolute top-20 left-20 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl"
+                    className="absolute top-20 left-20 w-32 h-32 bg-orange-500/20 rounded-full blur-3xl"
                 />
                 <motion.div
                     animate={{ y: [0, 20, 0] }}
                     transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                    className="absolute bottom-20 right-20 w-40 h-40 bg-orange-500/20 rounded-full blur-3xl"
+                    className="absolute bottom-20 right-20 w-40 h-40 bg-orange-600/20 rounded-full blur-3xl"
                 />
 
                 <motion.div
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    className="bg-[#2B2D31] p-8 rounded-xl shadow-2xl max-w-md w-full mx-4 relative z-10 text-center border border-white/5"
+                    className="bg-[#1C1917]/90 backdrop-blur-xl p-8 rounded-2xl shadow-2xl max-w-md w-full mx-4 relative z-10 text-center border border-orange-900/20"
                 >
-                    {room.banner_url && (
-                        <div className="h-32 w-full rounded-t-lg absolute top-0 left-0 overflow-hidden opacity-50">
-                            <img src={room.banner_url} className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#2B2D31]" />
-                        </div>
-                    )}
-
-                    <div className="relative mt-8 mb-6">
-                        <div className="w-24 h-24 mx-auto rounded-[30px] bg-stone-800 border-4 border-[#2B2D31] shadow-xl overflow-hidden flex items-center justify-center group">
+                    <div className="relative mt-4 mb-6">
+                        <div className="w-24 h-24 mx-auto rounded-2xl bg-stone-800 border-4 border-[#1C1917] shadow-xl overflow-hidden flex items-center justify-center">
                             {room.icon_url ? (
-                                <img src={room.icon_url} className="w-full h-full object-cover" />
+                                <img src={room.icon_url} className="w-full h-full object-cover" alt="" />
                             ) : (
-                                <span className="text-3xl font-bold text-stone-500">{room.name.substring(0, 2).toUpperCase()}</span>
+                                <span className="text-3xl font-bold text-orange-500">{room.name.substring(0, 2).toUpperCase()}</span>
                             )}
                         </div>
-                        {/* Online Indicator */}
-                        <div className="absolute bottom-0 right-[calc(50%-40px)] w-6 h-6 bg-green-500 border-4 border-[#2B2D31] rounded-full" />
                     </div>
 
-                    <h2 className="text-2xl font-bold text-white mb-2">{room.name}</h2>
+                    <h2 className="text-2xl font-bold text-white mb-2 font-serif">{room.name}</h2>
 
                     <div className="flex items-center justify-center gap-6 text-stone-400 text-sm mb-8">
                         <div className="flex items-center gap-2">
@@ -211,7 +256,7 @@ export default function RoomPage() {
                             <span>{Math.max(1, Math.floor(memberCount * 0.3))} Online</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-stone-600 rounded-full" />
+                            <Users className="w-4 h-4" />
                             <span>{memberCount} Members</span>
                         </div>
                     </div>
@@ -219,9 +264,9 @@ export default function RoomPage() {
                     <div className="space-y-3">
                         <button
                             onClick={handleAcceptInvite}
-                            className="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-bold rounded transition-colors flex items-center justify-center gap-2"
+                            className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
                         >
-                            Accept Invite
+                            Join Server
                         </button>
                         <button
                             onClick={handleRejectInvite}
@@ -238,7 +283,7 @@ export default function RoomPage() {
     return (
         <div className="flex-1 flex overflow-hidden flex-col md:flex-row">
             {/* Mobile Header */}
-            <div className="md:hidden h-14 bg-stone-900 border-b border-white/5 flex items-center px-4 shrink-0 justify-between">
+            <div className="md:hidden h-14 bg-[#1C1917]/90 border-b border-orange-900/20 flex items-center px-4 shrink-0 justify-between backdrop-blur-xl">
                 <div className="flex items-center gap-3">
                     <Sheet>
                         <SheetTrigger asChild>
@@ -246,21 +291,17 @@ export default function RoomPage() {
                                 <Menu className="w-6 h-6" />
                             </button>
                         </SheetTrigger>
-                        <SheetContent side="left" className="p-0 border-r border-white/10 bg-black w-[85vw] max-w-[320px]">
-                            {/* Mobile Sidebar Content */}
+                        <SheetContent side="left" className="p-0 border-r border-orange-900/20 bg-[#1C1917] w-[85vw] max-w-[320px]">
                             <div className="h-full flex">
-                                {/* We could add simplified Server Rail here if we had data, 
-                                    but for now let's just show channels + Home link */}
-                                <RoomSidebar
-                                    roomId={roomId}
-                                    roomName={roomName}
-                                    onSelectChannel={(c) => {
-                                        handleChannelSelect(c)
-                                        // Auto-close sheet? Simple click outside or we can pass a close handler
-                                    }}
-                                    currentUser={currentUser}
-                                    isMobile={true}
-                                />
+                                <Suspense fallback={<SidebarSkeleton />}>
+                                    <RoomSidebar
+                                        roomId={roomId}
+                                        roomName={roomName}
+                                        onSelectChannel={handleChannelSelect}
+                                        currentUser={currentUser}
+                                        isMobile={true}
+                                    />
+                                </Suspense>
                             </div>
                         </SheetContent>
                     </Sheet>
@@ -268,74 +309,79 @@ export default function RoomPage() {
                 </div>
             </div>
 
-            {/* Desktop Sidebar: Room Channels */}
+            {/* Desktop Sidebar */}
             <div className="hidden md:flex h-full">
-                <RoomSidebar
-                    roomId={roomId}
-                    roomName={roomName}
-                    onSelectChannel={handleChannelSelect}
-                    currentUser={currentUser}
-                />
+                <Suspense fallback={<SidebarSkeleton />}>
+                    <RoomSidebar
+                        roomId={roomId}
+                        roomName={roomName}
+                        onSelectChannel={handleChannelSelect}
+                        currentUser={currentUser}
+                    />
+                </Suspense>
             </div>
 
             {/* Main Content */}
             <div className="flex-1 flex overflow-hidden relative">
-                {(activeChannel === 'text' || activeChannel === 'image') && (
-                    <RoomChatArea roomId={roomId} roomName={roomName} />
-                )}
+                <Suspense fallback={<ContentSkeleton />}>
+                    {(activeChannel === 'text' || activeChannel === 'image') && (
+                        <RoomChatArea roomId={roomId} roomName={roomName} />
+                    )}
 
-                {(activeChannel === 'voice' || activeChannel === 'video') && (
-                    <div className="flex-1 flex h-full overflow-hidden">
-                        <div className="flex-1 relative flex flex-col min-w-0">
-                            {!isJoinedVideo ? (
-                                <VoiceLounge onJoin={handleJoinVideo} />
-                            ) : (
-                                <VideoRoom
-                                    roomName={roomName}
-                                    username={currentUser?.username || 'Guest'}
-                                    onLeave={handleVideoLeave}
-                                    onToggleChat={handleToggleChat}
-                                />
+                    {(activeChannel === 'voice' || activeChannel === 'video') && (
+                        <div className="flex-1 flex h-full overflow-hidden">
+                            <div className="flex-1 relative flex flex-col min-w-0">
+                                {!isJoinedVideo ? (
+                                    <VoiceLounge onJoin={handleJoinVideo} />
+                                ) : (
+                                    <VideoRoom
+                                        roomName={roomName}
+                                        username={currentUser?.username || 'Guest'}
+                                        onLeave={handleVideoLeave}
+                                        onToggleChat={handleToggleChat}
+                                    />
+                                )}
+                            </div>
+
+                            {showChat && (
+                                <div className="w-80 border-l border-orange-900/20 bg-[#1C1917]/90 backdrop-blur-md flex flex-col absolute md:relative right-0 h-full z-20 shadow-2xl">
+                                    <RoomChatArea roomId={roomId} roomName={roomName} isSidebar={true} />
+                                </div>
                             )}
                         </div>
+                    )}
 
-                        {/* Chat Sidebar Overlay/Panel */}
-                        {showChat && (
-                            <div className="w-80 border-l border-white/5 bg-stone-950/90 backdrop-blur-md flex flex-col transition-all duration-300 absolute md:relative right-0 h-full z-20 shadow-2xl">
-                                <RoomChatArea roomId={roomId} roomName={roomName} isSidebar={true} />
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {activeChannel === 'canvas' && (
-                    <div className="absolute inset-0 z-0">
-                        <Whiteboard roomId={roomId} currentUser={currentUser} />
-                    </div>
-                )}
+                    {activeChannel === 'canvas' && (
+                        <div className="absolute inset-0 z-0">
+                            <Whiteboard roomId={roomId} currentUser={currentUser} />
+                        </div>
+                    )}
+                </Suspense>
             </div>
 
-            {/* Right Sidebar: Info Panel */}
+            {/* Right Sidebar */}
             <div className="hidden xl:block h-full z-10 relative">
-                <RoomInfoSidebar roomId={roomId} />
+                <Suspense fallback={<div className="w-60 bg-stone-950/40 animate-pulse h-full" />}>
+                    <RoomInfoSidebar roomId={roomId} />
+                </Suspense>
             </div>
         </div>
     )
 }
 
-// Memoized Voice Lounge component
+// Memoized Voice Lounge
 const VoiceLounge = memo(({ onJoin }: { onJoin: () => void }) => (
-    <div className="flex-1 bg-stone-950/30 backdrop-blur-sm flex flex-col items-center justify-center text-stone-400">
-        <div className="w-20 h-20 bg-stone-800 rounded-full flex items-center justify-center mb-6 border border-white/10 shadow-lg">
-            <Video className="w-10 h-10 text-white" />
+    <div className="flex-1 bg-transparent flex flex-col items-center justify-center text-stone-400">
+        <div className="w-20 h-20 bg-stone-800 rounded-full flex items-center justify-center mb-6 border border-orange-900/20 shadow-lg">
+            <Video className="w-10 h-10 text-orange-500" />
         </div>
         <h2 className="text-2xl font-bold text-white mb-2 font-serif">Voice & Video Lounge</h2>
         <p className="max-w-md text-center text-stone-400">
-            This is where the magic happens. Join the voice channel to study together with video or audio.
+            This is where the magic happens. Join the voice channel to study together.
         </p>
         <button
             onClick={onJoin}
-            className="mt-8 px-8 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-full transition-all shadow-lg shadow-green-900/20"
+            className="mt-8 px-8 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-full transition-all shadow-lg shadow-orange-900/20"
         >
             Join Voice Channel
         </button>
