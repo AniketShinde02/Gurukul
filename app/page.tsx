@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -9,10 +9,7 @@ import AuthModal from '@/components/AuthModal'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'react-hot-toast'
 
-export default function HomePage() {
-    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
-    const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
-    const [user, setUser] = useState<any>(null)
+function AuthErrorListener() {
     const searchParams = useSearchParams()
 
     useEffect(() => {
@@ -42,6 +39,14 @@ export default function HomePage() {
         }
     }, [searchParams])
 
+    return null
+}
+
+export default function HomePage() {
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+    const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
+    const [user, setUser] = useState<any>(null)
+
     useEffect(() => {
         const checkUser = async () => {
             const { data: { user } } = await supabase.auth.getUser()
@@ -65,6 +70,9 @@ export default function HomePage() {
 
     return (
         <div className="min-h-screen bg-vedic-pattern text-white font-sans selection:bg-orange-500/30">
+            <Suspense fallback={null}>
+                <AuthErrorListener />
+            </Suspense>
 
             {/* 🕉️ Floating Pill Navigation - Compact */}
             <header className="fixed top-4 left-0 right-0 z-50 flex justify-center px-4">
