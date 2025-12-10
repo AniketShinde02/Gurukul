@@ -2,15 +2,45 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Video, Users, BookOpen, Sparkles, ArrowRight, Play, Flame } from 'lucide-react'
 import AuthModal from '@/components/AuthModal'
 import { supabase } from '@/lib/supabase/client'
+import { toast } from 'react-hot-toast'
 
 export default function HomePage() {
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
     const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
     const [user, setUser] = useState<any>(null)
+    const searchParams = useSearchParams()
+
+    useEffect(() => {
+        // Check for auth errors from redirect
+        const error = searchParams.get('error')
+        if (error) {
+            let errorMessage = 'Authentication failed. Please try again.'
+            let errorIcon = '⚠️'
+
+            if (error === 'link_expired') {
+                errorMessage = 'Password reset link has expired. Please request a new one.'
+                errorIcon = '⏰'
+            } else if (error === 'link_used') {
+                errorMessage = 'This link has already been used. Please request a new password reset.'
+                errorIcon = '🔒'
+            } else if (error === 'access_denied') {
+                errorMessage = 'Access denied. The link may be invalid or expired.'
+                errorIcon = '🚫'
+            }
+
+            toast.error(errorMessage, {
+                duration: 7000,
+                icon: errorIcon
+            })
+            // Clean up URL
+            window.history.replaceState({}, '', '/')
+        }
+    }, [searchParams])
 
     useEffect(() => {
         const checkUser = async () => {

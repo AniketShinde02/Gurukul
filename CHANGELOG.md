@@ -1,5 +1,250 @@
 # Changelog
 
+## [2025-12-10] - Event Lifecycle System & UI Polish 🎭
+
+> **Session Goal**: Implement a comprehensive events system with lifecycle management (Upcoming/Active/Past), attendance tracking, and polished UI interactions including custom confirmation dialogs.
+
+---
+
+### 📅 Event Lifecycle Management
+
+We've upgraded the simple event list into a full-featured event hosting platform.
+
+| Feature | Detailed Description |
+|---------|----------------------|
+| **3-State Lifecycle** | Events now automatically transition between `Upcoming` (future), `Active` (now), and `Past` (finished) based on time. |
+| **Active Events** | "Live" events move to the top with a **pulsing red badge**, glowing border, and "Click to join" button. |
+| **Linking Channels** | Events can now be linked to voice/video channels. Joining an event automatically opens the correct channel. |
+| **Attendance Tracking** | New `room_event_participants` table tracks who joined/left. Real-time participant counts displayed on cards. |
+| **Past Events** | Finished events are automatically moved to a collapsible "Past Events" section at the bottom. |
+
+**Technical Implementation**:
+```typescript
+// Auto-compute status on fetch
+const status = 
+    startTime > now ? 'upcoming' : 
+    (!endTime || endTime > now) ? 'active' : 
+    'past';
+
+// Real-time Participant Count
+const { count } = await supabase
+    .from('room_event_participants')
+    .select('*', { count: 'exact', head: true })
+    .eq('event_id', event.id)
+    .is('left_at', null)
+```
+
+**Files Changed**:
+- `components/sangha/EventCard.tsx` (NEW - Smart component)
+- `components/sangha/RoomSidebar.tsx` (Lifecycle logic)
+- `scripts/enhance-events-lifecycle.sql` (Database schema)
+
+---
+
+### 🛑 Universal Custom Delete Dialogs
+
+We replaced all ugly browser `confirm()` prompts with beautiful, consistently styled custom dialogs matching the Vedic theme.
+
+| Action | Previous Experience | New Experience |
+|--------|---------------------|----------------|
+| **Delete Channel** | Browser `confirm()` popup ❌ | **Vedic Dialog**: Dark theme, red warning, shows channel name/type ✅ |
+| **Delete Server** | Browser `confirm()` popup ❌ | **Destructive Dialog**: Requires explicit confirmation, warns about data loss ✅ |
+| **Delete Role** | Browser `confirm()` popup ❌ | **Role Dialog**: Shows role name and color dot for visual confirmation ✅ |
+| **Kick Member** | Browser `confirm()` popup ❌ | **Member Dialog**: Shows user avatar and name to prevent mistakes ✅ |
+| **Unfriend** | Browser `confirm()` popup ❌ | **Unfriend Dialog**: Warns about chat history loss, shows friend name ✅ |
+
+**Design System**:
+- **Theme**: `bg-stone-900` with `border-white/10`
+- **Typography**: Red headers (`text-red-400`) for destructive actions
+- **Safety**: "This action cannot be undone" warning with ⚠️ icon
+- **Context**: Always shows WHAT is being deleted (name, type, avatar)
+
+**Files Changed**:
+- `components/sangha/RoomSidebar.tsx` (Channels/Categories/Events)
+- `components/sangha/ServerSettingsModal.tsx` (Server/Roles/Members)
+- `components/sangha/ChannelSettingsModal.tsx` (Channel Settings)
+- `components/sangha/FriendsView.tsx` (Unfriend)
+
+---
+
+### 🎨 Visual Improvements
+
+| Component | Change |
+|-----------|--------|
+| **Event Card** | Added "LIVE" badge with radio icon, participant count with user icon, and status-based coloring. |
+| **Dropdown Menus** | Updated "Delete" and "Kick" items to use red text/hover states for clarity. |
+| **Sidebar Layout** | Improved spacing and grouping for the new 3-section event display. |
+| **Server Context Menu** | Wired "Create Channel/Category/Event" buttons to open the Unified Creation Modal with the correct tab pre-selected. |
+
+---
+
+## [2025-12-10] - UI/UX Polish & Realtime Reliability 🎨
+
+> **Session Goal**: Fix user-reported UI/UX issues, improve realtime sync reliability, and add notification infrastructure.
+
+---
+
+### ⚡ Password Reset - Instant Feedback (Optimistic UI)
+
+| Issue | What Was Wrong | How We Fixed It |
+|-------|---------------|-----------------|
+| **5+ Second Delay** | User clicked "Send reset link" and waited 5+ seconds before seeing any response | Made the flow **optimistic**: show success toast INSTANTLY, send email in background |
+| **Blocking UI** | The button was disabled while waiting for Supabase email API | Button now shows spinner for <100ms, then immediately shows success |
+| **Generic Message** | Old message revealed if email existed or not | New message: "If an account exists for this email, we've sent a password reset link." (security best practice) |
+
+**Technical Implementation**:
+```tsx
+// Fire and forget pattern - don't wait for email API
+setIsLoading(false)  // Stop loading immediately
+toast.success('If an account exists...')  // Show success instantly
+supabase.auth.resetPasswordForEmail(email)  // Send in background
+  .then(({ error }) => {
+    if (error) console.error(error)  // Silent fail - don't alert user
+  })
+```
+
+**Files Changed**: `components/AuthModal.tsx`
+
+---
+
+### 🚪 Join Server Popup - Fixed Logic
+
+| Issue | What Was Wrong | How We Fixed It |
+|-------|---------------|-----------------|
+| **Creator Sees Join Screen** | After creating a server, the creator was shown "Join Server" popup | Now checks if `room.created_by === userId` - creator never sees join screen |
+| **Auto-Add Creator** | If creator wasn't in `room_participants`, they were stuck | Creator is now auto-added to participants if missing (fixes data inconsistency) |
+| **Wrong Styling** | Join popup had Discord colors | Updated to Vedic theme (orange buttons, warm backgrounds) |
+
+**Logic Flow**:
+1. Fetch room with `created_by` field
+2. Check: Is current user the creator? → Skip join screen, auto-add to participants
+3. Check: Is user already a member? → Skip join screen
+4. Only show join screen if: NOT creator AND NOT member
+
+**Files Changed**: `app/(authenticated)/sangha/rooms/[roomId]/page.tsx`
+
+---
+
+### 🔄 Server Rail - Realtime Updates
+
+| Issue | What Was Wrong | How We Fixed It |
+|-------|---------------|-----------------|
+| **Manual Refresh Needed** | After creating a server, sidebar didn't update | Added Supabase realtime subscription for `study_rooms` table |
+| **Avatar Changes Not Reflected** | Changing server icon didn't update sidebar | Realtime UPDATE events now trigger state update |
+| **Deleted Servers Remain** | Deleted servers stayed in list until refresh | Realtime DELETE events remove from list immediately |
+
+**Technical Implementation**:
+```tsx
+supabase
+  .channel('study_rooms_changes')
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'study_rooms' }, (payload) => {
+    if (payload.eventType === 'INSERT') setRooms(prev => [...prev, payload.new])
+    if (payload.eventType === 'UPDATE') setRooms(prev => prev.map(...))
+    if (payload.eventType === 'DELETE') setRooms(prev => prev.filter(...))
+  })
+  .subscribe()
+```
+
+**Files Changed**: `app/(authenticated)/sangha/layout.tsx`
+
+---
+
+### 🖼️ Block Default Browser Context Menu
+
+| Issue | What Was Wrong | How We Fixed It |
+|-------|---------------|-----------------|
+| **Image Context Menu** | Right-clicking server icon with image showed browser's "Open image in new tab" menu | Added `onContextMenu={(e) => e.preventDefault()}` to img tag |
+| **Image Dragging** | Could drag server icon images | Added `draggable={false}` and `pointer-events-none` |
+
+**Files Changed**: `app/(authenticated)/sangha/layout.tsx`
+
+---
+
+### 🔔 Notification System (New Infrastructure)
+
+Created a complete notification system for future use:
+
+| Feature | Description |
+|---------|-------------|
+| **Zustand Store** | Global state for notifications with persistence |
+| **Toast Notifications** | Custom styled toasts matching Vedic theme |
+| **Sound Effects** | Preloaded audio for instant playback |
+| **Settings Toggle** | Users can mute sounds or disable notifications |
+| **Type Support** | `message`, `dm`, `call`, `system` notification types |
+
+**Usage**:
+```tsx
+import { showMessageNotification, playSound } from '@/hooks/useNotifications'
+
+// Show notification
+showMessageNotification('Aniket', 'Hey there!', avatarUrl, '#general', 'Physics Club')
+
+// Play sound directly
+playSound('messageReceived')
+```
+
+**Files Created**: 
+- `hooks/useNotifications.tsx` (store + helpers)
+- `public/sounds/README.md` (sound file documentation)
+
+---
+
+### 💬 Realtime Messages - Fixed Sync Issues
+
+| Issue | What Was Wrong | How We Fixed It |
+|-------|---------------|-----------------|
+| **Duplicate Messages** | Same message sometimes appeared twice | Added duplicate check: `if (prev.some(m => m.id === data.id)) return prev` |
+| **Missing Scroll** | New messages didn't auto-scroll into view | Added `chatEndRef` and auto-scroll on new message |
+| **No Notifications** | Messages arrived but no toast when window hidden | Added notification trigger when `document.hidden` is true |
+| **Silent Subscription** | No way to verify realtime was connected | Added connection status logging |
+
+**Technical Implementation**:
+```tsx
+// Prevent duplicates
+setMessages(prev => {
+  if (prev.some(m => m.id === data.id)) return prev
+  return [...prev, data]
+})
+
+// Auto-scroll
+setTimeout(() => {
+  chatEndRef?.current?.scrollIntoView({ behavior: 'smooth' })
+}, 100)
+
+// Notify if window hidden
+if (data.sender_id !== currentUser?.id && document.hidden) {
+  showMessageNotification(...)
+}
+```
+
+**Files Changed**: `components/sangha/RoomChatArea.tsx`
+
+---
+
+### 📦 Summary of Files Changed
+
+| File | Changes |
+|------|---------|
+| `components/AuthModal.tsx` | Optimistic password reset, spinner animation |
+| `app/(authenticated)/sangha/rooms/[roomId]/page.tsx` | Creator check, auto-add participant |
+| `app/(authenticated)/sangha/layout.tsx` | Realtime subscription, block image context menu |
+| `components/sangha/RoomChatArea.tsx` | Duplicate prevention, auto-scroll, notifications |
+| `hooks/useNotifications.tsx` | NEW - Complete notification system |
+| `public/sounds/README.md` | NEW - Sound file documentation |
+
+---
+
+### ⏳ Pending / Future Work
+
+| Item | Priority | Notes |
+|------|----------|-------|
+| Add actual sound files | Medium | Need MP3 files for `/public/sounds/` |
+| Channel image upload | Medium | Currently demo-only |
+| Call notifications | High | Incoming call ringtone |
+| DM notifications | High | Private message alerts |
+
+---
+
 ## [2025-12-09] - Core App Fine-Tuning & Performance Optimization 🚀
 
 > **Session Goal**: Fix critical user-reported issues and optimize Sangha for production-scale multi-user performance.

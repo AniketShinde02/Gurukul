@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -99,6 +99,7 @@ export function ServerSettingsModal({ roomId, isOpen, onClose, onDelete }: { roo
     const [bannerFile, setBannerFile] = useState<File | null>(null)
     const [iconPreview, setIconPreview] = useState<string | null>(null)
     const [bannerPreview, setBannerPreview] = useState<string | null>(null)
+    const [showDeleteServerConfirm, setShowDeleteServerConfirm] = useState(false)
 
     useEffect(() => {
         if (isOpen && roomId) {
@@ -208,6 +209,26 @@ export function ServerSettingsModal({ roomId, isOpen, onClose, onDelete }: { roo
             toast.error(error.message || 'Failed to save settings')
         } finally {
             setSaving(false)
+        }
+    }
+
+    const handleDeleteServer = async () => {
+        const { error } = await supabase
+            .from('study_rooms')
+            .delete()
+            .eq('id', roomId)
+
+        if (error) {
+            console.error('Failed to delete server', error)
+            toast.error('Failed to delete server')
+        } else {
+            toast.success('Server deleted')
+            setShowDeleteServerConfirm(false)
+            if (onDelete) {
+                onDelete()
+            } else {
+                window.location.href = '/sangha'
+            }
         }
     }
 
@@ -334,26 +355,7 @@ export function ServerSettingsModal({ roomId, isOpen, onClose, onDelete }: { roo
                                                 </Button>
 
                                                 <Button
-                                                    onClick={async () => {
-                                                        if (!confirm('Are you sure you want to DELETE this server? This action cannot be undone.')) return
-
-                                                        const { error } = await supabase
-                                                            .from('study_rooms')
-                                                            .delete()
-                                                            .eq('id', roomId)
-
-                                                        if (error) {
-                                                            console.error('Failed to delete server', error)
-                                                            toast.error('Failed to delete server')
-                                                        } else {
-                                                            toast.success('Server deleted')
-                                                            if (onDelete) {
-                                                                onDelete()
-                                                            } else {
-                                                                window.location.href = '/sangha'
-                                                            }
-                                                        }
-                                                    }}
+                                                    onClick={() => setShowDeleteServerConfirm(true)}
                                                     variant="destructive"
                                                     className="ml-auto bg-red-600/10 text-red-500 hover:bg-red-600/20 border border-red-600/20"
                                                 >
@@ -381,6 +383,32 @@ export function ServerSettingsModal({ roomId, isOpen, onClose, onDelete }: { roo
                     </div>
                 </div>
             </DialogContent>
+
+            {/* Delete Server Confirmation */}
+            <Dialog open={showDeleteServerConfirm} onOpenChange={setShowDeleteServerConfirm}>
+                <DialogContent className="bg-stone-900 border-white/10 text-white sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-serif text-red-400">Delete Server</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <p className="text-sm text-stone-300">
+                            Are you sure you want to <span className="font-bold text-red-400">DELETE</span> this server?
+                        </p>
+                        <p className="text-sm text-stone-300 mt-2">
+                            Server: <span className="font-bold text-white">{name}</span>
+                        </p>
+                        <p className="text-xs text-red-400 mt-3">⚠️ This action cannot be undone. All channels, messages, and settings will be permanently deleted.</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setShowDeleteServerConfirm(false)} className="hover:bg-white/5 hover:text-white">
+                            Cancel
+                        </Button>
+                        <Button onClick={handleDeleteServer} className="bg-red-600 hover:bg-red-700 text-white">
+                            Delete Server
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Dialog>
     )
 }
@@ -401,6 +429,7 @@ function NavButton({ active, onClick, children, icon }: any) {
 function RolesManager({ roomId, roles, setRoles }: { roomId: string, roles: Role[], setRoles: React.Dispatch<React.SetStateAction<Role[]>> }) {
     const [selectedRole, setSelectedRole] = useState<Role | null>(null)
     const [editedRole, setEditedRole] = useState<Role | null>(null)
+    const [showDeleteRoleConfirm, setShowDeleteRoleConfirm] = useState(false)
 
     const handleCreateRole = async () => {
         const newRole = {
@@ -442,7 +471,6 @@ function RolesManager({ roomId, roles, setRoles }: { roomId: string, roles: Role
 
     const handleDeleteRole = async () => {
         if (!editedRole) return
-        if (!confirm('Are you sure you want to delete this role?')) return
 
         const { error } = await supabase.from('room_roles').delete().eq('id', editedRole.id)
 
@@ -450,7 +478,10 @@ function RolesManager({ roomId, roles, setRoles }: { roomId: string, roles: Role
             setRoles((prev: Role[]) => prev.filter(r => r.id !== editedRole.id))
             setSelectedRole(null)
             setEditedRole(null)
+            setShowDeleteRoleConfirm(false)
             toast.success('Role deleted')
+        } else {
+            toast.error('Failed to delete role')
         }
     }
 
@@ -566,7 +597,7 @@ function RolesManager({ roomId, roles, setRoles }: { roomId: string, roles: Role
                     </div>
 
                     <div className="flex justify-between pt-4 border-t border-white/10 mt-4">
-                        <Button variant="destructive" onClick={handleDeleteRole}>Delete Role</Button>
+                        <Button variant="destructive" onClick={() => setShowDeleteRoleConfirm(true)}>Delete Role</Button>
                         <Button onClick={handleSaveRole} className="bg-green-600 hover:bg-green-700 text-white">Save Changes</Button>
                     </div>
                 </div>
@@ -576,6 +607,33 @@ function RolesManager({ roomId, roles, setRoles }: { roomId: string, roles: Role
                     <p>Select a role to edit permissions</p>
                 </div>
             )}
+
+            {/* Delete Role Confirmation */}
+            <Dialog open={showDeleteRoleConfirm} onOpenChange={setShowDeleteRoleConfirm}>
+                <DialogContent className="bg-stone-900 border-white/10 text-white sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-serif text-red-400">Delete Role</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <p className="text-sm text-stone-300">
+                            Are you sure you want to delete this role?
+                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: editedRole?.color }} />
+                            <span className="font-bold text-white">{editedRole?.name}</span>
+                        </div>
+                        <p className="text-xs text-red-400 mt-3">⚠️ This action cannot be undone. Members with this role will lose their permissions.</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setShowDeleteRoleConfirm(false)} className="hover:bg-white/5 hover:text-white">
+                            Cancel
+                        </Button>
+                        <Button onClick={handleDeleteRole} className="bg-red-600 hover:bg-red-700 text-white">
+                            Delete Role
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
@@ -583,6 +641,7 @@ function RolesManager({ roomId, roles, setRoles }: { roomId: string, roles: Role
 function MembersManager({ roomId, roles }: { roomId: string, roles: Role[] }) {
     const [members, setMembers] = useState<Member[]>([])
     const [loading, setLoading] = useState(true)
+    const [kickingMember, setKickingMember] = useState<Member | null>(null)
 
     useEffect(() => {
         fetchMembers()
@@ -626,8 +685,6 @@ function MembersManager({ roomId, roles }: { roomId: string, roles: Role[] }) {
     }
 
     const handleKick = async (userId: string) => {
-        if (!confirm('Are you sure you want to kick this member?')) return
-
         const { error } = await supabase
             .from('room_participants')
             .delete()
@@ -636,8 +693,10 @@ function MembersManager({ roomId, roles }: { roomId: string, roles: Role[] }) {
 
         if (!error) {
             setMembers(prev => prev.filter(m => m.user_id !== userId))
+            setKickingMember(null)
             toast.success('Member kicked')
         } else {
+            console.error('Kick member error:', error)
             toast.error('Failed to kick member')
         }
     }
@@ -692,7 +751,7 @@ function MembersManager({ roomId, roles }: { roomId: string, roles: Role[] }) {
                                                 {role.name}
                                             </DropdownMenuItem>
                                         ))}
-                                        <DropdownMenuItem className="text-red-400 focus:text-red-400 border-t border-white/10 mt-1" onClick={() => handleKick(member.user_id)}>
+                                        <DropdownMenuItem className="text-red-400 focus:text-red-400 border-t border-white/10 mt-1" onClick={() => setKickingMember(member)}>
                                             Kick Member
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
@@ -702,6 +761,38 @@ function MembersManager({ roomId, roles }: { roomId: string, roles: Role[] }) {
                     ))
                 )}
             </div>
+
+            {/* Kick Member Confirmation */}
+            <Dialog open={!!kickingMember} onOpenChange={(open) => !open && setKickingMember(null)}>
+                <DialogContent className="bg-stone-900 border-white/10 text-white sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-serif text-red-400">Kick Member</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <p className="text-sm text-stone-300">
+                            Are you sure you want to kick this member from the server?
+                        </p>
+                        {kickingMember && (
+                            <div className="flex items-center gap-3 mt-3 p-2 bg-stone-800/50 rounded-lg">
+                                <Avatar className="w-10 h-10">
+                                    <AvatarImage src={kickingMember.profile.avatar_url || undefined} />
+                                    <AvatarFallback>{kickingMember.profile.username[0]}</AvatarFallback>
+                                </Avatar>
+                                <span className="font-bold text-white">{kickingMember.profile.username}</span>
+                            </div>
+                        )}
+                        <p className="text-xs text-red-400 mt-3">⚠️ They can rejoin with a new invite link.</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setKickingMember(null)} className="hover:bg-white/5 hover:text-white">
+                            Cancel
+                        </Button>
+                        <Button onClick={() => kickingMember && handleKick(kickingMember.user_id)} className="bg-red-600 hover:bg-red-700 text-white">
+                            Kick Member
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

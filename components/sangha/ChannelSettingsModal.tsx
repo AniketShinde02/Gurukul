@@ -30,6 +30,7 @@ export function ChannelSettingsModal({ roomId, channelId, isOpen, onClose }: { r
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [activeTab, setActiveTab] = useState('overview')
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
     useEffect(() => {
         const fetchData = async () => {
@@ -86,7 +87,7 @@ export function ChannelSettingsModal({ roomId, channelId, isOpen, onClose }: { r
     }
 
     const handleDelete = async () => {
-        if (!channel || !confirm('Are you sure you want to delete this channel? This cannot be undone.')) return
+        if (!channel) return
 
         const { error } = await supabase
             .from('room_channels')
@@ -94,9 +95,11 @@ export function ChannelSettingsModal({ roomId, channelId, isOpen, onClose }: { r
             .eq('id', channel.id)
 
         if (error) {
+            console.error('Channel deletion error:', error)
             toast.error('Failed to delete channel')
         } else {
             toast.success('Channel deleted')
+            setShowDeleteConfirm(false)
             onClose()
         }
     }
@@ -141,7 +144,7 @@ export function ChannelSettingsModal({ roomId, channelId, isOpen, onClose }: { r
                         Permissions
                     </Button>
                     <div className="flex-1" />
-                    <Button variant="ghost" className="justify-start text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={handleDelete}>
+                    <Button variant="ghost" className="justify-start text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => setShowDeleteConfirm(true)}>
                         Delete Channel
                     </Button>
                 </div>
@@ -231,6 +234,32 @@ export function ChannelSettingsModal({ roomId, channelId, isOpen, onClose }: { r
                     )}
                 </div>
             </DialogContent>
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <DialogContent className="bg-stone-900 border-white/10 text-white sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-serif text-red-400">Delete Channel</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <p className="text-sm text-stone-300">
+                            Are you sure you want to delete <span className="font-bold text-white">#{channel?.name}</span>?
+                        </p>
+                        <p className="text-xs text-stone-400 mt-2">
+                            Type: {channel?.type}
+                        </p>
+                        <p className="text-xs text-red-400 mt-3">⚠️ This action cannot be undone.</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setShowDeleteConfirm(false)} className="hover:bg-white/5 hover:text-white">
+                            Cancel
+                        </Button>
+                        <Button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white">
+                            Delete Channel
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </Dialog>
     )
 }

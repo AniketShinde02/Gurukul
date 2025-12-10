@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 import { PomodoroTimer } from './PomodoroTimer'
 import { LoFiPlayer } from './LoFiPlayer'
-import { Hash, Volume2, Settings, ChevronDown, Presentation, Signal, PhoneOff, Mic, MicOff, Video, VideoOff, Sliders, Plus, Trash2, Edit2, Shield, Users, LogOut, Image as ImageIcon, MonitorPlay } from 'lucide-react'
+import { Hash, Volume2, Settings, ChevronDown, Presentation, Signal, PhoneOff, Mic, MicOff, Video, VideoOff, Sliders, Plus, Trash2, Edit2, Shield, Users, LogOut, Image as ImageIcon, MonitorPlay, Radio } from 'lucide-react'
 
 // ... (existing imports)
 
@@ -13,6 +13,7 @@ import { Hash, Volume2, Settings, ChevronDown, Presentation, Signal, PhoneOff, M
 
 import Link from 'next/link'
 import { UserProfilePopup } from './UserProfilePopup'
+import { EventCard } from './EventCard'
 import { useCall } from './GlobalCallManager'
 import { supabase } from '@/lib/supabase/client'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -136,6 +137,7 @@ import { toast } from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 import { ServerSettingsModal } from './ServerSettingsModal'
 import { ChannelSettingsModal } from './ChannelSettingsModal'
+import { UnifiedCreationModal } from './UnifiedCreationModal'
 import { useServerPermissions } from '@/hooks/useServerPermissions'
 
 type Channel = {
@@ -143,6 +145,26 @@ type Channel = {
     name: string
     type: 'text' | 'voice' | 'canvas' | 'video' | 'image'
     position: number
+    category_id?: string | null
+    description?: string | null
+    is_private?: boolean
+}
+
+type Category = {
+    id: string
+    name: string
+    position: number
+}
+
+type RoomEvent = {
+    id: string
+    name: string
+    description?: string | null
+    start_time: string
+    end_time?: string | null
+    channel_id?: string | null
+    status?: 'upcoming' | 'active' | 'past'
+    participant_count?: number
 }
 
 export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, isMobile = false }: { roomId: string, roomName: string, onSelectChannel: (type: 'text' | 'voice' | 'canvas' | 'video' | 'image') => void, currentUser?: any, isMobile?: boolean }) {
@@ -154,9 +176,26 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
     const [duration, setDuration] = useState(0)
     const [participants, setParticipants] = useState<{ sid: string, identity: string }[]>([])
     const [channels, setChannels] = useState<Channel[]>([])
+    const [categories, setCategories] = useState<Category[]>([])
+    const [events, setEvents] = useState<RoomEvent[]>([])
     const [isCreatingChannel, setIsCreatingChannel] = useState(false)
+    const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null)
+    const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null)
+    const [deletingEventId, setDeletingEventId] = useState<string | null>(null)
+    const [showPastEvents, setShowPastEvents] = useState(false)
+    const [creationMode, setCreationMode] = useState<'channel' | 'category' | 'event'>('channel')
     const [newChannelName, setNewChannelName] = useState('')
     const [newChannelType, setNewChannelType] = useState<'text' | 'voice' | 'canvas' | 'video' | 'image'>('text')
+    const [newChannelCategory, setNewChannelCategory] = useState<string>('')
+    const [newChannelDescription, setNewChannelDescription] = useState('')
+    const [newChannelPrivate, setNewChannelPrivate] = useState(false)
+    // Category fields
+    const [newCategoryName, setNewCategoryName] = useState('')
+    // Event fields
+    const [newEventName, setNewEventName] = useState('')
+    const [newEventDescription, setNewEventDescription] = useState('')
+    const [newEventStartTime, setNewEventStartTime] = useState('')
+    const [newEventEndTime, setNewEventEndTime] = useState('')
 
     const quickSettingsRef = useRef<HTMLDivElement>(null)
     const userControlsRef = useRef<HTMLDivElement>(null)
@@ -167,31 +206,113 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
 
     const { can, loading: permissionsLoading } = useServerPermissions(roomId, currentUser?.id)
 
-    // Fetch Channels
-    useEffect(() => {
-        const fetchChannels = async () => {
-            const { data } = await supabase
-                .from('room_channels')
-                .select('*')
-                .eq('room_id', roomId)
-                .order('position', { ascending: true })
-                .order('created_at', { ascending: true })
+    // Fetch functions defined with useCallback so they can be called from modal
+    const fetchChannels = useCallback(async () => {
+        const { data } = await supabase
+            .from('room_channels')
+            .select('*')
+            .eq('room_id', roomId)
+            .order('position', { ascending: true })
+            .order('created_at', { ascending: true })
 
-            if (data) setChannels(data as Channel[])
-        }
+        if (data) setChannels(data as Channel[])
+    }, [roomId])
+
+    const fetchCategories = useCallback(async () => {
+        const { data } = await supabase
+            .from('room_categories')
+            .select('*')
+            .eq('room_id', roomId)
+            .order('position', { ascending: true })
+
+        if (data) setCategories(data as Category[])
+    }, [roomId])
+
+    const fetchEvents = useCallback(async () => {
+        // Fetch all events (not just upcoming)
+        const { data: eventsData } = await supabase
+            .from('room_events')
+            .select('*')
+            .eq('room_id', roomId)
+            .order('start_time', { ascending: true })
+
+        if (!eventsData) return
+
+        // Fetch participant counts for each event
+        const eventsWithStatus: RoomEvent[] = await Promise.all(
+            eventsData.map(async (event) => {
+                // Get participant count
+                const { count } = await supabase
+                    .from('room_event_participants')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('event_id', event.id)
+                    .is('left_at', null)
+
+                // Compute status based on time
+                const now = new Date()
+                const startTime = new Date(event.start_time)
+                const endTime = event.end_time ? new Date(event.end_time) : null
+
+                let status: 'upcoming' | 'active' | 'past'
+                if (startTime > now) {
+                    status = 'upcoming'
+                } else if (!endTime || endTime > now) {
+                    status = 'active'
+                } else {
+                    status = 'past'
+                }
+
+                return {
+                    ...event,
+                    status,
+                    participant_count: count || 0
+                }
+            })
+        )
+
+        setEvents(eventsWithStatus)
+    }, [roomId])
+
+    const refetchAll = useCallback(() => {
         fetchChannels()
+        fetchCategories()
+        fetchEvents()
+    }, [fetchChannels, fetchCategories, fetchEvents])
 
-        const channel = supabase
+    // Fetch Channels, Categories and Events
+    useEffect(() => {
+        fetchChannels()
+        fetchCategories()
+        fetchEvents()
+
+        // Realtime subscriptions
+        const channelSub = supabase
             .channel(`room_channels:${roomId}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'room_channels', filter: `room_id=eq.${roomId}` }, () => {
                 fetchChannels()
             })
             .subscribe()
 
+        const categorySub = supabase
+            .channel(`room_categories:${roomId}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'room_categories', filter: `room_id=eq.${roomId}` }, () => {
+                fetchCategories()
+            })
+            .subscribe()
+
+        const eventSub = supabase
+            .channel(`room_events:${roomId}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'room_events', filter: `room_id=eq.${roomId}` }, () => {
+                fetchEvents()
+            })
+            .subscribe()
+
         return () => {
-            supabase.removeChannel(channel)
+            supabase.removeChannel(channelSub)
+            supabase.removeChannel(categorySub)
+            supabase.removeChannel(eventSub)
         }
-    }, [roomId])
+    }, [roomId, fetchChannels, fetchCategories, fetchEvents])
 
     // Poll for participants - ONLY when connected to voice
     useEffect(() => {
@@ -275,7 +396,10 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
                 room_id: roomId,
                 name: newChannelName,
                 type: newChannelType,
-                position: channels.length
+                position: channels.length,
+                category_id: newChannelCategory || null,
+                description: newChannelDescription || null,
+                is_private: newChannelPrivate
             })
 
         if (error) {
@@ -283,14 +407,92 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
             toast.error(`Failed to create channel: ${error.message}`)
         } else {
             toast.success('Channel created')
-            setIsCreatingChannel(false)
-            setNewChannelName('')
+            resetCreationForm()
         }
     }
 
+    const handleCreateCategory = async () => {
+        if (!newCategoryName.trim()) return
+        if (!can('manage_channels')) {
+            toast.error('You do not have permission to create categories')
+            return
+        }
+
+        const { data: { user } } = await supabase.auth.getUser()
+        const { error } = await supabase
+            .from('room_categories')
+            .insert({
+                room_id: roomId,
+                name: newCategoryName,
+                position: categories.length,
+                created_by: user?.id
+            })
+
+        if (error) {
+            console.error('Category creation error:', error)
+            toast.error(`Failed to create category: ${error.message}`)
+        } else {
+            toast.success('Category created')
+            resetCreationForm()
+        }
+    }
+
+    const handleCreateEvent = async () => {
+        if (!newEventName.trim() || !newEventStartTime) {
+            toast.error('Event name and start time are required')
+            return
+        }
+        if (!can('manage_channels')) {
+            toast.error('You do not have permission to create events')
+            return
+        }
+
+        const { data: { user } } = await supabase.auth.getUser()
+        const { error } = await supabase
+            .from('room_events')
+            .insert({
+                room_id: roomId,
+                name: newEventName,
+                description: newEventDescription || null,
+                start_time: newEventStartTime,
+                end_time: newEventEndTime || null,
+                created_by: user?.id
+            })
+
+        if (error) {
+            console.error('Event creation error:', error)
+            toast.error(`Failed to create event: ${error.message}`)
+        } else {
+            toast.success('Event created')
+            resetCreationForm()
+        }
+    }
+
+    const handleSubmitCreation = () => {
+        if (creationMode === 'channel') handleCreateChannel()
+        else if (creationMode === 'category') handleCreateCategory()
+        else if (creationMode === 'event') handleCreateEvent()
+    }
+
+    const resetCreationForm = () => {
+        setIsCreatingChannel(false)
+        setNewChannelName('')
+        setNewChannelDescription('')
+        setNewChannelCategory('')
+        setNewChannelPrivate(false)
+        setNewCategoryName('')
+        setNewEventName('')
+        setNewEventDescription('')
+        setNewEventStartTime('')
+        setNewEventEndTime('')
+        setCreationMode('channel')
+    }
+
     const handleDeleteChannel = async (channelId: string) => {
-        if (!confirm('Are you sure you want to delete this channel?')) return
-        if (!can('manage_channels')) return
+        if (!can('manage_channels')) {
+            toast.error('You do not have permission to delete channels')
+            return
+        }
 
         const { error } = await supabase
             .from('room_channels')
@@ -298,12 +500,91 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
             .eq('id', channelId)
 
         if (error) {
+            console.error('Channel deletion error:', error)
             toast.error('Failed to delete channel')
         } else {
             toast.success('Channel deleted')
-            // Optimistic update
             setChannels(prev => prev.filter(c => c.id !== channelId))
+            setDeletingChannelId(null)
         }
+    }
+
+    const handleDeleteCategory = async (categoryId: string) => {
+        if (!can('manage_channels')) {
+            toast.error('You do not have permission to delete categories')
+            return
+        }
+
+        const { error } = await supabase
+            .from('room_categories')
+            .delete()
+            .eq('id', categoryId)
+
+        if (error) {
+            console.error('Category deletion error:', error)
+            toast.error('Failed to delete category')
+        } else {
+            toast.success('Category deleted')
+            setCategories(prev => prev.filter(c => c.id !== categoryId))
+            setDeletingCategoryId(null)
+        }
+    }
+
+    const handleDeleteEvent = async (eventId: string) => {
+        if (!can('manage_channels')) {
+            toast.error('You do not have permission to delete events')
+            return
+        }
+
+        const { error } = await supabase
+            .from('room_events')
+            .delete()
+            .eq('id', eventId)
+
+        if (error) {
+            console.error('Event deletion error:', error)
+            toast.error('Failed to delete event')
+        } else {
+            toast.success('Event deleted')
+            setEvents(prev => prev.filter(e => e.id !== eventId))
+            setDeletingEventId(null)
+        }
+    }
+
+    const handleJoinEvent = async (event: RoomEvent) => {
+        if (!currentUser?.id) return
+
+        // Add user to event participants
+        const { error } = await supabase
+            .from('room_event_participants')
+            .upsert({
+                event_id: event.id,
+                user_id: currentUser.id,
+                left_at: null
+            }, {
+                onConflict: 'event_id,user_id'
+            })
+
+        if (error) {
+            console.error('Join event error:', error)
+            toast.error('Failed to join event')
+            return
+        }
+
+        // If event has a linked channel, open it
+        if (event.channel_id) {
+            const channel = channels.find(c => c.id === event.channel_id)
+            if (channel) {
+                setActiveChannel(channel.type)
+                onSelectChannel(channel.type)
+                toast.success(`Joined ${event.name}!`)
+            }
+        } else {
+            toast.success('Marked as attending!')
+        }
+
+        // Refresh events to update participant count
+        fetchEvents()
     }
 
     const textChannels = channels.filter(c => c.type === 'text')
@@ -311,6 +592,11 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
     const videoChannels = channels.filter(c => c.type === 'video')
     const canvasChannels = channels.filter(c => c.type === 'canvas')
     const imageChannels = channels.filter(c => c.type === 'image')
+
+    // Filter events by status
+    const activeEvents = events.filter(e => e.status === 'active')
+    const upcomingEvents = events.filter(e => e.status === 'upcoming')
+    const pastEvents = events.filter(e => e.status === 'past')
 
     return (
         <div className={cn(
@@ -348,8 +634,8 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
                 </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Channels List */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-4 custom-scrollbar">
+            {/* Channels List - Scrollable without visible scrollbar */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-4 no-scrollbar">
                 {/* Text Channels */}
                 <ChannelGroup
                     title="Text Channels"
@@ -361,7 +647,7 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
                     canManage={can('manage_channels')}
                     onCreate={() => { setIsCreatingChannel(true); setNewChannelType('text') }}
                     onEdit={setEditingChannelId}
-                    onDelete={handleDeleteChannel}
+                    onDelete={setDeletingChannelId}
                     onContextMenu={handleContextMenu}
                 />
 
@@ -376,7 +662,7 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
                     canManage={can('manage_channels')}
                     onCreate={() => { setIsCreatingChannel(true); setNewChannelType('voice') }}
                     onEdit={setEditingChannelId}
-                    onDelete={handleDeleteChannel}
+                    onDelete={setDeletingChannelId}
                     onContextMenu={handleContextMenu}
                 >
                     {/* ... participants ... */}
@@ -393,7 +679,7 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
                     canManage={can('manage_channels')}
                     onCreate={() => { setIsCreatingChannel(true); setNewChannelType('video') }}
                     onEdit={setEditingChannelId}
-                    onDelete={handleDeleteChannel}
+                    onDelete={setDeletingChannelId}
                     onContextMenu={handleContextMenu}
                 />
 
@@ -408,7 +694,7 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
                     canManage={can('manage_channels')}
                     onCreate={() => { setIsCreatingChannel(true); setNewChannelType('canvas') }}
                     onEdit={setEditingChannelId}
-                    onDelete={handleDeleteChannel}
+                    onDelete={setDeletingChannelId}
                     onContextMenu={handleContextMenu}
                 />
 
@@ -423,9 +709,131 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
                     canManage={can('manage_channels')}
                     onCreate={() => { setIsCreatingChannel(true); setNewChannelType('image') }}
                     onEdit={setEditingChannelId}
-                    onDelete={handleDeleteChannel}
+                    onDelete={setDeletingChannelId}
                     onContextMenu={handleContextMenu}
                 />
+
+                {/* Categories with grouped channels */}
+                {categories.map(category => {
+                    const categoryChannels = channels.filter(c => c.category_id === category.id)
+                    return (
+                        <div key={category.id} className="space-y-1">
+                            <div className="flex items-center justify-between px-2 text-xs font-bold text-stone-500 uppercase hover:text-stone-400 cursor-pointer group tracking-wider">
+                                <div className="flex items-center gap-0.5">
+                                    <ChevronDown className="w-3 h-3" />
+                                    <span>{category.name}</span>
+                                </div>
+                                {can('manage_channels') && (
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => setIsCreatingChannel(true)} className="hover:text-white">
+                                            <Plus className="w-3 h-3" />
+                                        </button>
+                                        <button onClick={() => setDeletingCategoryId(category.id)} className="hover:text-red-400">
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="space-y-[2px]">
+                                {categoryChannels.length === 0 && (
+                                    <div className="px-2 text-[10px] text-stone-600 italic">No channels</div>
+                                )}
+                                {categoryChannels.map(channel => (
+                                    <ChannelItem
+                                        key={channel.id}
+                                        id={channel.id}
+                                        name={channel.name}
+                                        type={channel.type}
+                                        active={false}
+                                        onClick={() => { setActiveChannel(channel.type); onSelectChannel(channel.type) }}
+                                        onEdit={can('manage_channels') ? () => setEditingChannelId(channel.id) : undefined}
+                                        onDelete={can('manage_channels') ? () => setDeletingChannelId(channel.id) : undefined}
+                                        onContextMenu={(e) => handleContextMenu(e, channel.id)}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )
+                })}
+
+                {/* Active Events - Always at top with LIVE badge */}
+                {activeEvents.length > 0 && (
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between px-2 text-xs font-bold text-red-500 uppercase tracking-wider animate-pulse">
+                            <div className="flex items-center gap-1.5">
+                                <Radio className="w-3 h-3" />
+                                <span>Live Events</span>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            {activeEvents.map(event => (
+                                <EventCard
+                                    key={event.id}
+                                    event={event}
+                                    canManage={can('manage_channels')}
+                                    onDelete={setDeletingEventId}
+                                    onJoin={handleJoinEvent}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Upcoming Events */}
+                {upcomingEvents.length > 0 && (
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between px-2 text-xs font-bold text-orange-500 uppercase tracking-wider">
+                            <div className="flex items-center gap-1.5">
+                                <span>📅</span>
+                                <span>Upcoming Events</span>
+                            </div>
+                            {can('manage_channels') && (
+                                <button onClick={() => setIsCreatingChannel(true)} className="opacity-70 hover:opacity-100 hover:text-orange-400 transition-opacity">
+                                    <Plus className="w-3 h-3" />
+                                </button>
+                            )}
+                        </div>
+                        <div className="space-y-1">
+                            {upcomingEvents.map(event => (
+                                <EventCard
+                                    key={event.id}
+                                    event={event}
+                                    canManage={can('manage_channels')}
+                                    onDelete={setDeletingEventId}
+                                    onJoin={handleJoinEvent}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Past Events - Collapsible */}
+                {pastEvents.length > 0 && (
+                    <div className="space-y-1">
+                        <div
+                            onClick={() => setShowPastEvents(!showPastEvents)}
+                            className="flex items-center justify-between px-2 text-xs font-bold text-stone-600 uppercase tracking-wider cursor-pointer hover:text-stone-500 transition-colors"
+                        >
+                            <div className="flex items-center gap-1.5">
+                                <ChevronDown className={`w-3 h-3 transition-transform ${showPastEvents ? '' : '-rotate-90'}`} />
+                                <span>Past Events ({pastEvents.length})</span>
+                            </div>
+                        </div>
+                        {showPastEvents && (
+                            <div className="space-y-1">
+                                {pastEvents.slice(0, 5).map(event => (
+                                    <EventCard
+                                        key={event.id}
+                                        event={event}
+                                        canManage={can('manage_channels')}
+                                        onDelete={setDeletingEventId}
+                                        onJoin={handleJoinEvent}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Custom Context Menu */}
@@ -460,7 +868,7 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
                             <div
                                 className="flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-red-500/10 hover:text-red-400 text-red-400 gap-2"
                                 onClick={() => {
-                                    handleDeleteChannel(contextMenu.channelId)
+                                    setDeletingChannelId(contextMenu.channelId)
                                     setContextMenu(null)
                                 }}
                             >
@@ -624,54 +1032,116 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
                 onClose={() => setEditingChannelId(null)}
             />
 
-            {/* Create Channel Dialog */}
-            <Dialog open={isCreatingChannel} onOpenChange={setIsCreatingChannel}>
-                <DialogContent className="bg-stone-900 border-white/10 text-white">
+            <UnifiedCreationModal
+                isOpen={isCreatingChannel}
+                onClose={() => setIsCreatingChannel(false)}
+                roomId={roomId}
+                categories={categories}
+                channelsCount={channels.length}
+                categoriesCount={categories.length}
+                canManage={can('manage_channels')}
+                onSuccess={refetchAll}
+            />
+
+            {/* Delete Channel Confirmation */}
+            <Dialog open={!!deletingChannelId} onOpenChange={(open) => !open && setDeletingChannelId(null)}>
+                <DialogContent className="bg-stone-900 border-white/10 text-white sm:max-w-[425px]">
                     <DialogHeader>
-                        <DialogTitle>Create Channel</DialogTitle>
+                        <DialogTitle className="text-xl font-serif text-red-400">Delete Channel</DialogTitle>
                         <DialogDescription className="text-stone-400">
-                            Create a new channel for your server.
+                            Are you sure you want to delete this channel? This cannot be undone.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <Label>Channel Type</Label>
-                            <RadioGroup value={newChannelType} onValueChange={(v) => setNewChannelType(v as 'text' | 'voice' | 'canvas' | 'video' | 'image')} className="grid grid-cols-2 gap-4">
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="text" id="text" className="border-white/20 text-orange-500" />
-                                    <Label htmlFor="text" className="cursor-pointer flex items-center gap-2"><Hash className="w-4 h-4" /> Text</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="voice" id="voice" className="border-white/20 text-orange-500" />
-                                    <Label htmlFor="voice" className="cursor-pointer flex items-center gap-2"><Volume2 className="w-4 h-4" /> Voice</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="video" id="video" className="border-white/20 text-orange-500" />
-                                    <Label htmlFor="video" className="cursor-pointer flex items-center gap-2"><MonitorPlay className="w-4 h-4" /> Video</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="canvas" id="canvas" className="border-white/20 text-orange-500" />
-                                    <Label htmlFor="canvas" className="cursor-pointer flex items-center gap-2"><Presentation className="w-4 h-4" /> Canvas</Label>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="image" id="image" className="border-white/20 text-orange-500" />
-                                    <Label htmlFor="image" className="cursor-pointer flex items-center gap-2"><ImageIcon className="w-4 h-4" /> Image</Label>
-                                </div>
-                            </RadioGroup>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Channel Name</Label>
-                            <Input
-                                value={newChannelName}
-                                onChange={(e) => setNewChannelName(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
-                                placeholder="new-channel"
-                                className="bg-stone-800 border-white/10 text-white placeholder:text-stone-500"
-                            />
-                        </div>
+                    <div className="py-4">
+                        <p className="text-sm text-stone-300">
+                            Channel: <span className="font-bold text-white">#{channels.find(c => c.id === deletingChannelId)?.name}</span>
+                        </p>
+                        <p className="text-xs text-stone-400 mt-1">
+                            Type: {channels.find(c => c.id === deletingChannelId)?.type}
+                        </p>
+                        <p className="text-xs text-red-400 mt-2">⚠️ This action cannot be undone.</p>
                     </div>
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => setIsCreatingChannel(false)} className="hover:bg-white/5 hover:text-white">Cancel</Button>
-                        <Button onClick={handleCreateChannel} className="bg-orange-600 hover:bg-orange-700 text-white">Create Channel</Button>
+                        <Button variant="ghost" onClick={() => setDeletingChannelId(null)} className="hover:bg-white/5 hover:text-white">
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => deletingChannelId && handleDeleteChannel(deletingChannelId)}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                            Delete Channel
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Category Confirmation */}
+            <Dialog open={!!deletingCategoryId} onOpenChange={(open) => !open && setDeletingCategoryId(null)}>
+                <DialogContent className="bg-stone-900 border-white/10 text-white sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-serif text-red-400">Delete Category</DialogTitle>
+                        <DialogDescription className="text-stone-400">
+                            Are you sure you want to delete this category? All channels in this category will be moved to "No Category".
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <p className="text-sm text-stone-300">
+                            Category: <span className="font-bold text-white">{categories.find(c => c.id === deletingCategoryId)?.name}</span>
+                        </p>
+                        <p className="text-xs text-red-400 mt-2">⚠️ This action cannot be undone.</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setDeletingCategoryId(null)} className="hover:bg-white/5 hover:text-white">
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => deletingCategoryId && handleDeleteCategory(deletingCategoryId)}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                            Delete Category
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Event Confirmation */}
+            <Dialog open={!!deletingEventId} onOpenChange={(open) => !open && setDeletingEventId(null)}>
+                <DialogContent className="bg-stone-900 border-white/10 text-white sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-serif text-red-400">Delete Event</DialogTitle>
+                        <DialogDescription className="text-stone-400">
+                            Are you sure you want to delete this event? This will remove it from the schedule.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <p className="text-sm text-stone-300">
+                            Event: <span className="font-bold text-white">{events.find(e => e.id === deletingEventId)?.name}</span>
+                        </p>
+                        <p className="text-xs text-stone-400 mt-1">
+                            {deletingEventId && events.find(e => e.id === deletingEventId) && (
+                                <>
+                                    {new Date(events.find(e => e.id === deletingEventId)!.start_time).toLocaleDateString('en-US', {
+                                        weekday: 'long',
+                                        month: 'long',
+                                        day: 'numeric',
+                                        hour: 'numeric',
+                                        minute: '2-digit'
+                                    })}
+                                </>
+                            )}
+                        </p>
+                        <p className="text-xs text-red-400 mt-2">⚠️ This action cannot be undone.</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setDeletingEventId(null)} className="hover:bg-white/5 hover:text-white">
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => deletingEventId && handleDeleteEvent(deletingEventId)}
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                        >
+                            Delete Event
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

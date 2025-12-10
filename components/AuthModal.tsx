@@ -46,6 +46,10 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }: A
 
     const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault()
+
+        // Safety check: Prevent double execution
+        if (isLoading) return
+
         setIsLoading(true)
 
         const formData = new FormData(e.currentTarget)
@@ -71,13 +75,26 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }: A
                 onClose()
                 router.push('/dashboard')
             } else if (view === 'forgot_password') {
-                console.log('Resetting password for:', email)
-                const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                    redirectTo: `${window.location.origin}/auth/callback?next=/profile/reset-password`,
+                // OPTIMISTIC: Show success immediately, send email in background
+                // This prevents the user from feeling the 3-5 second delay
+                setIsLoading(false)
+                toast.success('If an account exists for this email, we\'ve sent a password reset link.', {
+                    duration: 5000,
+                    icon: '📧'
                 })
-                if (error) throw error
-                toast.success('Password reset link sent! Check your email.')
                 setView('signin')
+
+                // Fire and forget - email sends in background
+                supabase.auth.resetPasswordForEmail(email, {
+                    redirectTo: `${window.location.origin}/auth/callback?next=/profile/reset-password`,
+                }).then(({ error }) => {
+                    if (error) {
+                        console.error('Password reset email error:', error)
+                        // Don't show error to user - they already got success message
+                        // This is intentional for security (don't reveal if email exists)
+                    }
+                })
+                return // Exit early since we already handled loading state
             }
         } catch (error: any) {
             console.error('Auth error:', error)
@@ -179,10 +196,20 @@ export default function AuthModal({ isOpen, onClose, initialMode = 'signin' }: A
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-orange-900/40 hover:shadow-orange-900/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full bg-gradient-to-r from-orange-600 to-orange-700 hover:from-orange-700 hover:to-orange-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-orange-900/40 hover:shadow-orange-900/60 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
+                        {isLoading && (
+                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        )}
                         {isLoading
-                            ? 'Processing...'
+                            ? view === 'signup'
+                                ? 'Creating Account...'
+                                : view === 'forgot_password'
+                                    ? 'Sending Reset Link...'
+                                    : 'Signing In...'
                             : view === 'signup'
                                 ? 'Create Account'
                                 : view === 'forgot_password'

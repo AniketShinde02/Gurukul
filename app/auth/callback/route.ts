@@ -9,6 +9,29 @@ export async function GET(request: Request) {
     const next = requestUrl.searchParams.get('next')
     const type = requestUrl.searchParams.get('type') // 'recovery', 'signup', etc.
 
+    // Check for Supabase error params (sent when link expired, invalid, etc.)
+    const error = requestUrl.searchParams.get('error')
+    const errorCode = requestUrl.searchParams.get('error_code')
+    const errorDescription = requestUrl.searchParams.get('error_description')
+
+    // Handle Supabase errors FIRST (before trying code exchange)
+    if (error) {
+        console.error('Supabase Auth Error:', { error, errorCode, errorDescription })
+
+        // Map specific error codes to user-friendly messages
+        let userMessage = 'auth_error'
+
+        if (errorCode === 'otp_expired') {
+            userMessage = 'link_expired'
+        } else if (errorCode === 'otp_disabled') {
+            userMessage = 'link_used'
+        } else if (error === 'access_denied') {
+            userMessage = 'access_denied'
+        }
+
+        return NextResponse.redirect(`${requestUrl.origin}/?error=${userMessage}`)
+    }
+
     // 1. Process Code Exchange
     if (code) {
         const cookieStore = await cookies()
@@ -35,9 +58,9 @@ export async function GET(request: Request) {
             }
         )
 
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
-        if (!error) {
+        if (!exchangeError) {
             // 2. Profile Logic: Ensure user has a profile
             const { data: { user } } = await supabase.auth.getUser()
 
@@ -72,11 +95,14 @@ export async function GET(request: Request) {
 
             // 4. Default Redirect
             return NextResponse.redirect(`${requestUrl.origin}${next || '/dashboard'}`)
+        } else {
+            // Log code exchange error
+            console.error('Code exchange failed:', exchangeError)
         }
     }
 
-    // Error Case
-    return NextResponse.redirect(`${requestUrl.origin}/auth/signin?error=auth_code_error`)
+    // Generic Error Case - redirect to landing page
+    return NextResponse.redirect(`${requestUrl.origin}/?error=auth_code_error`)
 }
 
 // Helper: Anonymous Username Generator

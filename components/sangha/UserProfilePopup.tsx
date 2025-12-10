@@ -245,7 +245,7 @@ export function UserProfilePopup({ user, isOpen, onClose, anchorRef }: UserProfi
 
         await supabase.auth.signOut()
         toast.success('Logged out successfully')
-        window.location.href = '/auth'
+        window.location.href = '/'
     }
 
     if (!isOpen) return null

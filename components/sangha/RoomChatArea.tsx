@@ -44,6 +44,7 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
     const [messages, setMessages] = useState<RoomMessage[]>([])
     const [newMessage, setNewMessage] = useState('')
     const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+    const [currentUser, setCurrentUser] = useState<{ id: string, username?: string } | null>(null)
     const [showEmojiPicker, setShowEmojiPicker] = useState(false)
     const [showGifPicker, setShowGifPicker] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
@@ -52,6 +53,7 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
     const [previewImage, setPreviewImage] = useState<string | null>(null)
 
     const scrollRef = useRef<HTMLDivElement>(null)
+    const chatEndRef = useRef<HTMLDivElement>(null)
     const emojiPickerRef = useRef<HTMLDivElement>(null)
     const gifPickerRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -64,12 +66,13 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
             const { data: { user } } = await supabase.auth.getUser()
             if (user) {
                 setCurrentUserId(user.id)
+                setCurrentUser({ id: user.id, username: user.email?.split('@')[0] })
             }
         }
         getUser()
         fetchMessages()
 
-        // Realtime subscription
+        // Realtime subscription for room messages
         const channel = supabase
             .channel(`room:${roomId}`)
             .on(
@@ -81,6 +84,7 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
                     filter: `room_id=eq.${roomId}`
                 },
                 async (payload) => {
+                    // Fetch full message with sender info
                     const { data } = await supabase
                         .from('room_messages')
                         .select(`
@@ -92,7 +96,30 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
                         .single()
 
                     if (data) {
-                        setMessages(prev => [...prev, data])
+                        // Prevent duplicates (in case of race condition)
+                        setMessages(prev => {
+                            if (prev.some(m => m.id === data.id)) return prev
+                            return [...prev, data]
+                        })
+
+                        // Auto-scroll to bottom on new message
+                        setTimeout(() => {
+                            chatEndRef?.current?.scrollIntoView({ behavior: 'smooth' })
+                        }, 100)
+
+                        // Show notification if message is from someone else and window not focused
+                        if (data.sender_id !== currentUser?.id && document.hidden) {
+                            // Import dynamically to avoid SSR issues
+                            import('@/hooks/useNotifications').then(({ showMessageNotification }) => {
+                                showMessageNotification(
+                                    data.sender?.username || 'Unknown',
+                                    data.content,
+                                    data.sender?.avatar_url,
+                                    undefined,
+                                    roomName
+                                )
+                            })
+                        }
                     }
                 }
             )
@@ -120,12 +147,16 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
                     setMessages(prev => prev.map(msg => msg.id === payload.new.id ? { ...msg, ...payload.new } : msg))
                 }
             )
-            .subscribe()
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log(`Realtime connected for room: ${roomId}`)
+                }
+            })
 
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [roomId])
+    }, [roomId, currentUser?.id, roomName])
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -529,6 +560,8 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
                             )
                         })}
                     </AnimatePresence>
+                    {/* Scroll anchor for auto-scroll on new messages */}
+                    <div ref={chatEndRef} />
                 </div>
             </div>
 

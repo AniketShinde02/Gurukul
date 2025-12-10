@@ -14,6 +14,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
 type Tab = 'online' | 'all' | 'pending' | 'blocked' | 'add_friend'
 
@@ -24,6 +25,7 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
     const [loading, setLoading] = useState(true)
     const [friendUsername, setFriendUsername] = useState('')
     const [sendingRequest, setSendingRequest] = useState(false)
+    const [unfriendingBuddy, setUnfriendingBuddy] = useState<{ id: string, username: string } | null>(null)
     const { startDm } = useDm()
 
     useEffect(() => {
@@ -105,11 +107,7 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
         }
     }
 
-    const handleUnfriend = async (connectionId: string, username: string) => {
-        // Confirm before deleting
-        if (!confirm(`Are you sure you want to unfriend ${username}? This will permanently delete your connection and chat history.`)) {
-            return
-        }
+    const executeUnfriend = async (connectionId: string) => {
 
         try {
             const { error } = await supabase
@@ -119,6 +117,7 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
 
             if (error) throw error
             toast.success('Friend removed')
+            setUnfriendingBuddy(null)
             fetchData()
         } catch (error) {
             toast.error('Failed to remove friend')
@@ -358,7 +357,7 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
                                                     <DropdownMenuItem
                                                         onClick={(e) => {
                                                             e.stopPropagation()
-                                                            handleUnfriend(buddy.connectionId, buddy.username)
+                                                            setUnfriendingBuddy({ id: buddy.connectionId, username: buddy.username })
                                                         }}
                                                         className="text-red-400 focus:text-red-400 focus:bg-red-500/10 cursor-pointer gap-2"
                                                     >
@@ -389,6 +388,31 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
                     </div>
                 </div>
             </div>
+            {/* Unfriend Confirmation */}
+            <Dialog open={!!unfriendingBuddy} onOpenChange={(open) => !open && setUnfriendingBuddy(null)}>
+                <DialogContent className="bg-stone-900 border-white/10 text-white sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-serif text-red-400">Remove Friend</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <p className="text-sm text-stone-300">
+                            Are you sure you want to unfriend <span className="font-bold text-white">{unfriendingBuddy?.username}</span>?
+                        </p>
+                        <p className="text-xs text-stone-400 mt-2">
+                            This will remove them from your friends list and delete your direct message history.
+                        </p>
+                        <p className="text-xs text-red-400 mt-2">⚠️ This action cannot be undone.</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setUnfriendingBuddy(null)} className="hover:bg-white/5 hover:text-white">
+                            Cancel
+                        </Button>
+                        <Button onClick={() => unfriendingBuddy && executeUnfriend(unfriendingBuddy.id)} className="bg-red-600 hover:bg-red-700 text-white">
+                            Remove Friend
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

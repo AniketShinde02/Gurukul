@@ -32,6 +32,9 @@
 - [x] **Music Player**: Lo-fi radio integration (YouTube/Spotify embed).
 - [x] **Server Settings Polish**: Improved image upload reliability and UI feedback.
 - [x] **Sidebar UX**: Unified dark theme and added quick access Dashboard icon.
+- [x] **Event Hosting**: Full lifecycle management (Upcoming/Active/Past), channel linking, and attendance tracking.
+- [x] **UI Polish**: Replaced all 12+ instances of browser `confirm()` with premium, custom-styled dialogs for consistent UX.
+- [x] **Context Menu Wiring**: Linked Server Rail right-click actions to the Unified Creation Modal.
 
 ## Phase 4: User Profile & Settings (Current Focus)
 - [x] **Profile Page**: View user details, avatar, bio.

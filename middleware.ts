@@ -37,11 +37,11 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getSession()
 
   // Protect dashboard routes
-  if (req.nextUrl.pathname.startsWith('/dashboard') || 
-      req.nextUrl.pathname.startsWith('/chat') || 
-      req.nextUrl.pathname.startsWith('/profile')) {
+  if (req.nextUrl.pathname.startsWith('/dashboard') ||
+    req.nextUrl.pathname.startsWith('/chat') ||
+    req.nextUrl.pathname.startsWith('/profile')) {
     if (!session) {
-      return NextResponse.redirect(new URL('/auth/signin', req.url))
+      return NextResponse.redirect(new URL('/', req.url))
     }
   }
 

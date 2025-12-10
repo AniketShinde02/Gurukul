@@ -53,7 +53,7 @@ export default function SettingsPage() {
             try {
                 const { data: { user } } = await supabase.auth.getUser()
                 if (!user) {
-                    router.push('/login')
+                    router.push('/')
                     return
                 }
                 setUser(user)
@@ -159,7 +159,7 @@ export default function SettingsPage() {
 
     const handleLogout = async () => {
         await supabase.auth.signOut()
-        router.push('/login')
+        router.push('/')
     }
 
     const handleVerificationUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {

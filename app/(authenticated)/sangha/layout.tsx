@@ -5,10 +5,14 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 import { Home, Plus, Compass, MessageCircle, Bell, VolumeX, Shield, Copy, User, LogOut, Settings, ChevronRight, LayoutDashboard, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { CreateServerModal } from '@/components/sangha/CreateServerModal'
 import { ServerSettingsModal } from '@/components/sangha/ServerSettingsModal'
+import { UnifiedCreationModal, CreationMode } from '@/components/sangha/UnifiedCreationModal'
 import { GlobalCallManager } from '@/components/sangha/GlobalCallManager'
 import { toast } from 'react-hot-toast'
 
@@ -23,6 +27,11 @@ export default function SanghaLayout({
     const [username, setUsername] = useState('Guest')
     const [userId, setUserId] = useState<string | null>(null)
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, roomId: string } | null>(null)
+    const [leavingServerId, setLeavingServerId] = useState<string | null>(null)
+    const [deletingServerId, setDeletingServerId] = useState<string | null>(null)
+    const [creationModalOpen, setCreationModalOpen] = useState(false)
+    const [creationMode, setCreationMode] = useState<CreationMode>('channel')
+    const [creationRoomId, setCreationRoomId] = useState<string | null>(null)
 
     const handleContextMenu = (e: React.MouseEvent, roomId: string) => {
         e.preventDefault()
@@ -58,9 +67,8 @@ export default function SanghaLayout({
         return () => window.removeEventListener('click', closeMenu)
     }, [])
 
-    const handleLeaveServer = async (roomId: string) => {
+    const executeLeaveServer = async (roomId: string) => {
         if (!userId) return
-        if (!confirm('Are you sure you want to leave this server?')) return
 
         // Check if it's the demo server
         if (roomId === 'demo-server') {
@@ -68,6 +76,7 @@ export default function SanghaLayout({
             if (pathname?.includes(roomId)) {
                 router.push('/sangha')
             }
+            setLeavingServerId(null)
             return
         }
 
@@ -79,18 +88,19 @@ export default function SanghaLayout({
 
         if (error) {
             console.error('Failed to leave server', error)
-            alert('Failed to leave server')
+            toast.error('Failed to leave server')
         } else {
             setRooms(prev => prev.filter(r => r.id !== roomId)) // Update state immediately
             if (pathname?.includes(roomId)) {
                 router.push('/sangha')
             }
+            toast.success('Left server')
+            setLeavingServerId(null)
         }
     }
 
-    const handleDeleteServer = async (roomId: string) => {
+    const executeDeleteServer = async (roomId: string) => {
         if (!userId) return
-        if (!confirm('Are you sure you want to DELETE this server? This action cannot be undone.')) return
 
         // Check if it's the demo server
         if (roomId === 'demo-server') {
@@ -98,6 +108,7 @@ export default function SanghaLayout({
             if (pathname?.includes(roomId)) {
                 router.push('/sangha')
             }
+            setDeletingServerId(null)
             return
         }
 
@@ -108,13 +119,14 @@ export default function SanghaLayout({
 
         if (error) {
             console.error('Failed to delete server', error)
-            alert('Failed to delete server: ' + error.message)
+            toast.error('Failed to delete server')
         } else {
             setRooms(prev => prev.filter(r => r.id !== roomId)) // Update state immediately
             if (pathname?.includes(roomId)) {
                 router.push('/sangha')
             }
             toast.success('Server deleted')
+            setDeletingServerId(null)
         }
     }
 
@@ -180,6 +192,40 @@ export default function SanghaLayout({
     useEffect(() => {
         fetchRooms()
     }, [fetchRooms])
+
+    // Realtime subscription for server rail updates
+    useEffect(() => {
+        const channel = supabase
+            .channel('study_rooms_changes')
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'study_rooms' },
+                (payload) => {
+                    console.log('Room change detected:', payload.eventType)
+
+                    if (payload.eventType === 'INSERT') {
+                        // Add new room to list
+                        setRooms(prev => {
+                            // Check if already exists (avoid duplicates)
+                            if (prev.some(r => r.id === payload.new.id)) return prev
+                            return [...prev, payload.new]
+                        })
+                    } else if (payload.eventType === 'UPDATE') {
+                        // Update existing room
+                        setRooms(prev => prev.map(r =>
+                            r.id === payload.new.id ? { ...r, ...payload.new } : r
+                        ))
+                    } else if (payload.eventType === 'DELETE') {
+                        // Remove deleted room
+                        setRooms(prev => prev.filter(r => r.id !== payload.old.id))
+                    }
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [])
 
     const handleInvite = (roomId: string) => {
         const link = `${window.location.protocol}//${window.location.host}/invite/${roomId}`
@@ -265,7 +311,13 @@ export default function SanghaLayout({
                                             >
                                                 <div className={`w-12 h-12 rounded-[24px] group-hover:rounded-[16px] transition-all duration-200 overflow-hidden ${pathname?.includes(room.id) ? 'rounded-[16px] ring-2 ring-offset-2 ring-offset-stone-900 ring-indigo-500' : 'bg-stone-800 hover:bg-indigo-500'}`}>
                                                     {room.icon_url ? (
-                                                        <img src={room.icon_url} alt={room.name} className="w-full h-full object-cover" />
+                                                        <img
+                                                            src={room.icon_url}
+                                                            alt={room.name}
+                                                            className="w-full h-full object-cover select-none pointer-events-none"
+                                                            draggable={false}
+                                                            onContextMenu={(e) => e.preventDefault()}
+                                                        />
                                                     ) : (
                                                         <div className="w-full h-full flex items-center justify-center text-stone-400 group-hover:text-white font-bold text-sm">
                                                             {room.name.substring(0, 2).toUpperCase()}
@@ -329,13 +381,37 @@ export default function SanghaLayout({
 
                                 {isAdmin(contextMenu.roomId) ? (
                                     <>
-                                        <div className="flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-white/10 hover:text-stone-50 gap-2">
+                                        <div
+                                            className="flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-white/10 hover:text-stone-50 gap-2"
+                                            onClick={() => {
+                                                setCreationRoomId(contextMenu.roomId)
+                                                setCreationMode('channel')
+                                                setCreationModalOpen(true)
+                                                setContextMenu(null)
+                                            }}
+                                        >
                                             Create Channel
                                         </div>
-                                        <div className="flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-white/10 hover:text-stone-50 gap-2">
+                                        <div
+                                            className="flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-white/10 hover:text-stone-50 gap-2"
+                                            onClick={() => {
+                                                setCreationRoomId(contextMenu.roomId)
+                                                setCreationMode('category')
+                                                setCreationModalOpen(true)
+                                                setContextMenu(null)
+                                            }}
+                                        >
                                             Create Category
                                         </div>
-                                        <div className="flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-white/10 hover:text-stone-50 gap-2">
+                                        <div
+                                            className="flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-white/10 hover:text-stone-50 gap-2"
+                                            onClick={() => {
+                                                setCreationRoomId(contextMenu.roomId)
+                                                setCreationMode('event')
+                                                setCreationModalOpen(true)
+                                                setContextMenu(null)
+                                            }}
+                                        >
                                             Create Event
                                         </div>
                                         <div className="h-px bg-white/10 my-1" />
@@ -345,7 +421,7 @@ export default function SanghaLayout({
                                         <div
                                             className="flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-red-500/10 hover:text-red-400 gap-2 text-red-500 mt-1"
                                             onClick={() => {
-                                                handleDeleteServer(contextMenu.roomId)
+                                                setDeletingServerId(contextMenu.roomId)
                                                 setContextMenu(null)
                                             }}
                                         >
@@ -356,7 +432,7 @@ export default function SanghaLayout({
                                     <div
                                         className="flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-red-500/10 hover:text-red-400 text-red-400 gap-2"
                                         onClick={() => {
-                                            handleLeaveServer(contextMenu.roomId)
+                                            setLeavingServerId(contextMenu.roomId)
                                             setContextMenu(null)
                                         }}
                                     >
@@ -431,6 +507,89 @@ export default function SanghaLayout({
                     {children}
                 </div>
             </div>
+            {/* Leave Server Confirmation */}
+            <Dialog open={!!leavingServerId} onOpenChange={(open) => !open && setLeavingServerId(null)}>
+                <DialogContent className="bg-stone-900 border-white/10 text-white sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-serif text-red-400">Leave Server</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <p className="text-sm text-stone-300">
+                            Are you sure you want to leave this server?
+                        </p>
+                        {leavingServerId && (() => {
+                            const room = rooms.find(r => r.id === leavingServerId)
+                            return room ? (
+                                <div className="flex items-center gap-3 mt-3 p-2 bg-stone-800/50 rounded-lg">
+                                    <Avatar className="w-10 h-10">
+                                        <AvatarImage src={room.icon_url || undefined} />
+                                        <AvatarFallback>{room.name[0]}</AvatarFallback>
+                                    </Avatar>
+                                    <span className="font-bold text-white">{room.name}</span>
+                                </div>
+                            ) : null
+                        })()}
+                        <p className="text-xs text-stone-400 mt-3">You won't be able to see channels or messages unless you rejoin.</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setLeavingServerId(null)} className="hover:bg-white/5 hover:text-white">
+                            Cancel
+                        </Button>
+                        <Button onClick={() => leavingServerId && executeLeaveServer(leavingServerId)} className="bg-red-600 hover:bg-red-700 text-white">
+                            Leave Server
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Server Confirmation */}
+            <Dialog open={!!deletingServerId} onOpenChange={(open) => !open && setDeletingServerId(null)}>
+                <DialogContent className="bg-stone-900 border-white/10 text-white sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-serif text-red-400">Delete Server</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <p className="text-sm text-stone-300">
+                            Are you sure you want to <span className="font-bold text-red-400">DELETE</span> this server?
+                        </p>
+                        {deletingServerId && (() => {
+                            const room = rooms.find(r => r.id === deletingServerId)
+                            return room ? (
+                                <div className="flex items-center gap-3 mt-3 p-2 bg-stone-800/50 rounded-lg">
+                                    <Avatar className="w-10 h-10">
+                                        <AvatarImage src={room.icon_url || undefined} />
+                                        <AvatarFallback>{room.name[0]}</AvatarFallback>
+                                    </Avatar>
+                                    <span className="font-bold text-white">{room.name}</span>
+                                </div>
+                            ) : null
+                        })()}
+                        <p className="text-xs text-red-400 mt-3">⚠️ This action cannot be undone. All channels, messages, and data will be permanently deleted.</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setDeletingServerId(null)} className="hover:bg-white/5 hover:text-white">
+                            Cancel
+                        </Button>
+                        <Button onClick={() => deletingServerId && executeDeleteServer(deletingServerId)} className="bg-red-600 hover:bg-red-700 text-white">
+                            Delete Server
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Creation Modal */}
+            {creationRoomId && (
+                <UnifiedCreationModal
+                    isOpen={creationModalOpen}
+                    onClose={() => setCreationModalOpen(false)}
+                    roomId={creationRoomId}
+                    categories={[]}
+                    channelsCount={0}
+                    categoriesCount={0}
+                    canManage={true}
+                    initialMode={creationMode}
+                />
+            )}
         </GlobalCallManager>
     )
 }

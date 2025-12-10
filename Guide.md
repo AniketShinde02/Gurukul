@@ -1351,6 +1351,8 @@ These properties are built on **Radix UI** primitives and styled with **Tailwind
 
 ---
 
+---
+
 ### 🐛 Known Small Issues (Not Urgent)
 
 | Issue | What It Means |
@@ -1360,5 +1362,182 @@ These properties are built on **Radix UI** primitives and styled with **Tailwind
 
 ---
 
-*Guide Last Updated: 2025-12-09*
+## Session Update: 2025-12-10 - UI/UX Polish & Realtime Reliability 🎨
+
+### What We Fixed Today (ELI5 Version)
+
+#### 1️⃣ Password Reset is Now INSTANT ⚡
+**Before**: You clicked "Send reset link" and waited... and waited... 5 seconds... wondering if it worked.
+**After**: Click → Boom! Success message in under 100ms. Email sends in background.
+
+**Analogy**: Instead of waiting at the post office while they mail your letter, you just drop it in the mailbox and walk away. The letter still gets sent, but you don't have to wait!
+
+#### 2️⃣ Join Server Popup Only Shows When Needed 🚪
+**Before**: You create a new server, click it, and it asks you to "Join" your own server. 🤦
+**After**: If you created it, you're automatically in. No silly popup.
+
+**How we know**: We now check if `room.created_by === yourUserId`. If yes, you're the boss - no joining needed!
+
+#### 3️⃣ Server List Updates in Realtime 🔄
+**Before**: Create a server → Nothing happens → Refresh page → Now it appears.
+**After**: Create a server → It appears instantly in the sidebar!
+
+**Magic ingredient**: Supabase Realtime. We subscribe to the `study_rooms` table and react to INSERT/UPDATE/DELETE events.
+
+#### 4️⃣ No More Browser "Open Image" Menu 🖼️
+**Before**: Right-click server icon → Browser shows "Open image in new tab".
+**After**: Right-click → Only our custom menu appears.
+
+**Fix**: Added `onContextMenu={e => e.preventDefault()}` to images.
+
+#### 5️⃣ Messages Don't Duplicate Anymore 💬
+**Before**: Sometimes the same message appeared twice.
+**After**: We check if message already exists before adding it.
+
+#### 6️⃣ New Messages Auto-Scroll Into View 📜
+**Before**: New message arrives → You have to scroll down to see it.
+**After**: New message → View scrolls automatically.
+
+---
+
+### New System: Notifications 🔔
+
+We created a complete notification infrastructure:
+
+| What | Where | How |
+|------|-------|-----|
+| Store | `hooks/useNotifications.tsx` | Zustand global state |
+| Toast | Same file | Custom styled component |
+| Sound | Same file | Preloaded audio elements |
+| Settings | Same file | `soundEnabled`, `notificationsEnabled` toggles |
+
+**To use**:
+```tsx
+import { showMessageNotification } from '@/hooks/useNotifications'
+
+showMessageNotification('Aniket', 'Hello!', avatarUrl, '#general', 'Physics Club')
+```
+
+---
+
+### Files Changed Today
+
+| File | What Changed |
+|------|-------------|
+| `components/AuthModal.tsx` | Optimistic password reset |
+| `app/(authenticated)/sangha/rooms/[roomId]/page.tsx` | Creator bypass for join screen |
+| `app/(authenticated)/sangha/layout.tsx` | Realtime subscription + block image context menu |
+| `components/sangha/RoomChatArea.tsx` | Duplicate prevention + auto-scroll + notifications |
+| `hooks/useNotifications.tsx` | **NEW** - Notification system |
+| `public/sounds/README.md` | **NEW** - Sound file docs |
+
+---
+
+### ✅ Updated Checklist
+
+- [x] Password reset is instant (optimistic)
+- [x] Join popup only for non-members
+- [x] Server rail updates in realtime
+- [x] Image context menu blocked
+- [x] Messages don't duplicate
+- [x] New messages auto-scroll
+- [x] Notification system created
+
+---
+
+### ⏳ Pending Work
+
+| Task | Priority |
+|------|----------|
+| Add actual sound files to `/public/sounds/` | Medium |
+| Wire up channel image upload (currently demo) | Medium |
+| Add call notifications (ringtone) | High |
+| Add DM notifications | High |
+| Multi-user load testing | High |
+
+---
+
+*Guide Last Updated: 2025-12-10*
+
+---
+
+### New System: Event Lifecycle & Attendance 📅
+
+We implemented a full event hosting platform within the Sangha interface:
+
+| State | Condition | UI Behavior |
+|-------|-----------|-------------|
+| **Upcoming** | `now < start_time` | Displayed in middle section, orange calendar icon |
+| **Active** | `start < now < end` | **Moved to TOP**, pulsing red "LIVE" badge, glowing border |
+| **Past** | `now > end_time` | Moved to collapsible bottom section, grayed out |
+
+**Key Features**:
+- **Channel Linking**: Events link to voice/video channels. Clicking "Join" opens the correct channel.
+- **Attendance**: `room_event_participants` table tracks joins/leaves relative to event start time.
+- **Real-time**: Participant counts update live via Supabase Realtime.
+
+**Database Schema**:
+```sql
+create table room_event_participants (
+    event_id uuid references room_events(id),
+    user_id uuid references profiles(id),
+    joined_at timestamptz default now(),
+    left_at timestamptz
+);
+```
+
+---
+
+### UX Polish: Custom Dialogs 🎨
+
+We standardized all destructive actions to use beautiful, custom-branded dialogs instead of browser alerts.
+
+**Why?**
+browser `confirm()` is ugly, blocking, and inconsistent with our premium theme.
+
+**What Changed?**
+- **Delete Channel** → Custom Vedic-themed dialog
+- **Delete Server** → Custom dialog with explicit warning
+- **Delete Role** → Custom dialog showing role color/name
+- **Kick Member** → Custom dialog showing user avatar
+- **Unfriend** → Custom dialog warning about chat history
+
+**Implementation Pattern**:
+```tsx
+// Before (Ugly)
+if (!confirm('Delete?')) return
+
+// After (Beautiful)
+const [showDelete, setShowDelete] = useState(false)
+// ...
+<Dialog open={showDelete}>
+  <DialogTitle>Delete Channel</DialogTitle>
+  <DialogDescription>Are you sure you want to delete #general?</DialogDescription>
+  <Button onClick={handleDelete}>Delete</Button>
+</Dialog>
+```
+
+---
+
+### Files Changed (Event System Update)
+
+| File | What Changed |
+|------|-------------|
+| `components/sangha/EventCard.tsx` | **NEW** - Smart component for 3-state event display |
+| `components/sangha/RoomSidebar.tsx` | Added event status computation & deletion dialogs |
+| `components/sangha/ServerSettingsModal.tsx` | Replaced all native confirms with custom dialogs |
+| `components/sangha/ChannelSettingsModal.tsx` | Replaced native confirm with custom dialog |
+| `components/sangha/FriendsView.tsx` | Replaced native confirm with custom dialog |
+| `scripts/enhance-events-lifecycle.sql` | **NEW** - SQL schema for properties & attendance |
+
+---
+
+### ✅ Updated Checklist (Event System)
+
+- [x] Events have 3 states (Upcoming/Active/Past)
+- [x] Active events show "LIVE" pulse and move to top
+- [x] Events link to channels and auto-open them
+- [x] Attendance is tracked in database
+- [x] ALL browser `confirm()` prompts removed from app
+- [x] Custom Vedic-themed dialogs for all delete actions
 

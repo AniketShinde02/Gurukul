@@ -69,6 +69,7 @@ type RoomBasic = {
     name: string
     icon_url?: string
     banner_url?: string
+    created_by?: string // Added to check if user is creator
 }
 
 export default function RoomPage() {
@@ -96,7 +97,7 @@ export default function RoomPage() {
                 const [roomResult, userResult] = await Promise.all([
                     supabase
                         .from('study_rooms')
-                        .select('id, name, icon_url, banner_url')
+                        .select('id, name, icon_url, banner_url, created_by')
                         .eq('id', roomId)
                         .single(),
                     supabase.auth.getUser()
@@ -116,7 +117,8 @@ export default function RoomPage() {
                     })
 
                     // Defer membership check - don't block render
-                    checkMembership(user.id)
+                    // Pass room data to check if user is creator
+                    checkMembership(user.id, roomResult.data?.created_by)
                 }
             } catch (error) {
                 console.error('Error loading room:', error)
@@ -129,7 +131,10 @@ export default function RoomPage() {
     }, [roomId])
 
     // Deferred: Check membership and load member count
-    const checkMembership = async (userId: string) => {
+    const checkMembership = async (userId: string, createdBy?: string) => {
+        // If user is the creator, they are automatically a member - no join screen needed
+        const isCreator = createdBy === userId
+
         const [participantResult, countResult, profileResult] = await Promise.all([
             supabase
                 .from('room_participants')
@@ -156,7 +161,19 @@ export default function RoomPage() {
             setCurrentUser(prev => prev ? { ...prev, username: profileResult.data.username } : null)
         }
 
-        if (!participantResult.data) {
+        // If user is creator but not in participants, auto-add them (fix data inconsistency)
+        if (isCreator && !participantResult.data) {
+            await supabase.from('room_participants').insert({
+                room_id: roomId,
+                user_id: userId
+            })
+            setMemberCount(prev => prev + 1)
+            // Creator is now a member, no join screen needed
+            return
+        }
+
+        // Only show join screen if NOT creator AND NOT already a member
+        if (!isCreator && !participantResult.data) {
             setShowJoinScreen(true)
         }
     }
