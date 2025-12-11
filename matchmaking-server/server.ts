@@ -204,9 +204,14 @@ function handleSignal(ws: WebSocket, data: any): void {
     // Relay WebRTC signaling (offer/answer/ice-candidate)
     const { sessionId, targetUserId, signal } = data;
 
+    console.log(`📡 Received signal: ${signal?.type || 'unknown'} for session ${sessionId} -> target ${targetUserId}`);
+
     const targetWs = userConnections.get(targetUserId);
     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
         send(targetWs, 'signal', { sessionId, signal });
+        console.log(`✅ Relayed ${signal?.type} to ${targetUserId}`);
+    } else {
+        console.warn(`⚠️ Target user ${targetUserId} not connected or socket closed`);
     }
 }
 

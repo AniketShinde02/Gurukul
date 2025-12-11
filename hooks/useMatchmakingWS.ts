@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSound } from '@/hooks/useSound';
+import { supabase } from '@/lib/supabase/client';
 
 type MatchStatus = 'idle' | 'searching' | 'connecting' | 'connected' | 'ended';
 
@@ -79,10 +80,26 @@ export function useMatchmakingWS(userId: string, enabled: boolean = true) {
                     setQueuePosition(null);
 
                     console.log('✅ Match found!', payload);
+
+                    // Create session in Supabase DB (so messages can be inserted)
+                    // Only initiator creates it to avoid duplicate inserts
+                    if (payload.isInitiator && userId && payload.partnerId) {
+                        supabase.from('chat_sessions').insert({
+                            id: payload.sessionId,
+                            user1_id: userId,
+                            user2_id: payload.partnerId,
+                            status: 'active'
+                        }).then(({ error }) => {
+                            if (error && error.code !== '23505') { // Ignore duplicate key error
+                                console.error('Failed to create session in DB:', error);
+                            }
+                        });
+                    }
                     break;
 
                 case 'signal':
                     // Handle WebRTC signaling - dispatch custom event
+                    console.log('🎯 Dispatching webrtc-signal event:', payload.signal?.type);
                     window.dispatchEvent(new CustomEvent('webrtc-signal', {
                         detail: payload
                     }));

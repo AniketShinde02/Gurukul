@@ -23,7 +23,7 @@ interface MatchResult {
     message: string;
 }
 
-export function useMatchmaking(userId: string) {
+export function useMatchmaking(userId: string, enabled: boolean = true) {
     const [status, setStatus] = useState<MatchStatus>('idle');
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [partnerId, setPartnerId] = useState<string | null>(null);
@@ -63,6 +63,13 @@ export function useMatchmaking(userId: string) {
         isSearchingRef.current = false;
     }, []);
 
+    // Force cleanup if disabled (to stop legacy polling when switching to WS mode)
+    useEffect(() => {
+        if (!enabled) {
+            cleanup();
+        }
+    }, [enabled, cleanup]);
+
     /**
      * Handle match found event
      */
@@ -99,6 +106,7 @@ export function useMatchmaking(userId: string) {
      * Start matchmaking with exponential backoff
      */
     const startMatching = useCallback(async (matchMode: 'buddies_first' | 'global' = 'buddies_first') => {
+        if (!enabled) return;
         if (isSearchingRef.current) return; // Prevent duplicate searches
 
         // Cleanup first (this sets isSearching to false)

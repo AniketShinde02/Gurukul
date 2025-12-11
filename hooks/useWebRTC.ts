@@ -81,7 +81,12 @@ export const useWebRTC = (
     // Send signaling message
     const sendSignal = useCallback(async (signal: any) => {
         const activeSessionId = sessionIdRef.current
-        if (!activeSessionId || !currentUserId) return
+        console.log('📤 sendSignal called:', signal.type, 'via', customSignaling ? 'WebSocket' : 'Supabase');
+
+        if (!activeSessionId || !currentUserId) {
+            console.error('❌ Missing session/user ID in sendSignal');
+            return;
+        }
 
         // Use Custom Signaling (WebSocket) if available
         if (customSignaling?.sendSignal) {
@@ -102,6 +107,7 @@ export const useWebRTC = (
         }
     }, [currentUserId, customSignaling])
 
+    // Handle incoming signal
     // Initialize Peer Connection
     const initializePeerConnection = useCallback(async (overrideSessionId?: string) => {
         if (overrideSessionId) {

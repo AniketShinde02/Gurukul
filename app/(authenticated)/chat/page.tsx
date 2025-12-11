@@ -47,6 +47,13 @@ export default function ChatPage() {
 
     // Check DB for matchmaking mode
     useEffect(() => {
+        // ENV Override: If explicitly set to 'true', ignore DB
+        if (process.env.NEXT_PUBLIC_USE_WS_MATCHMAKING === 'true') {
+            console.log('🟢 ENV Override: Using WebSocket mode');
+            setUseWS(true);
+            return;
+        }
+
         const checkSettings = async () => {
             try {
                 const { data } = await supabase
@@ -81,7 +88,7 @@ export default function ChatPage() {
 
     // Matchmaking Hooks
     // newMatchmaking is only "enabled" if useWS is true
-    const oldMatchmaking = useMatchmaking(currentUserId);
+    const oldMatchmaking = useMatchmaking(currentUserId, !useWS);
     const newMatchmaking = useMatchmakingWS(currentUserId, useWS);
 
     // Auto-fallback if WS fails repeatedly
@@ -147,15 +154,16 @@ export default function ChatPage() {
         if (!useWS) return;
 
         const handleWSSignal = async (event: CustomEvent) => {
-            const signal = event.detail;
-            if (sessionId) {
-                await handleSignal(signal, sessionId);
+            const { signal, sessionId: signalSessionId } = event.detail;
+            console.log('🔔 Received WS signal event:', signal?.type, 'for session:', signalSessionId);
+            if (signalSessionId && signal) {
+                await handleSignal(signal, signalSessionId);
             }
         };
 
         window.addEventListener('webrtc-signal', handleWSSignal as unknown as EventListener);
         return () => window.removeEventListener('webrtc-signal', handleWSSignal as unknown as EventListener);
-    }, [useWS, sessionId, handleSignal]);
+    }, [useWS, handleSignal]);
 
     /**
      * Check friend connection status
@@ -252,7 +260,7 @@ export default function ChatPage() {
                 }
             )
             .subscribe(async (status) => {
-                if (status === 'SUBSCRIBED') {
+                if (status === 'SUBSCRIBED' && !useWS) { // Only send ready signal in legacy mode
                     // Send ready signal
                     await supabase.from('messages').insert({
                         session_id: id,
@@ -264,7 +272,16 @@ export default function ChatPage() {
             });
 
         channelRef.current = channel;
-    }, [currentUserId, initializePeerConnection, handleIncomingMessage, setMatchStatus]);
+
+        // In WebSocket mode, start call immediately if we are the initiator
+        // We don't need to wait for the Supabase 'ready' signal
+        if (useWS && isInitiator) {
+            console.log('🚀 WS Mode: Starting call immediately as initiator');
+            setTimeout(() => {
+                startCall(id);
+            }, 500); // Small delay to ensure PC and LocalStream are ready
+        }
+    }, [currentUserId, initializePeerConnection, handleIncomingMessage, setMatchStatus, useWS, isInitiator, startCall]);
 
     /**
      * Watch for session changes from matchmaking
