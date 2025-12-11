@@ -155,7 +155,6 @@ export default function ChatPage() {
 
         const handleWSSignal = async (event: CustomEvent) => {
             const { signal, sessionId: signalSessionId } = event.detail;
-            console.log('🔔 Received WS signal event:', signal?.type, 'for session:', signalSessionId);
             if (signalSessionId && signal) {
                 await handleSignal(signal, signalSessionId);
             }

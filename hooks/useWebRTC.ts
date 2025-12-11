@@ -81,10 +81,8 @@ export const useWebRTC = (
     // Send signaling message
     const sendSignal = useCallback(async (signal: any) => {
         const activeSessionId = sessionIdRef.current
-        console.log('📤 sendSignal called:', signal.type, 'via', customSignaling ? 'WebSocket' : 'Supabase');
 
         if (!activeSessionId || !currentUserId) {
-            console.error('❌ Missing session/user ID in sendSignal');
             return;
         }
 

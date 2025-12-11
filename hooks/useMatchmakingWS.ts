@@ -99,7 +99,6 @@ export function useMatchmakingWS(userId: string, enabled: boolean = true) {
 
                 case 'signal':
                     // Handle WebRTC signaling - dispatch custom event
-                    console.log('🎯 Dispatching webrtc-signal event:', payload.signal?.type);
                     window.dispatchEvent(new CustomEvent('webrtc-signal', {
                         detail: payload
                     }));
