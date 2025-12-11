@@ -10,8 +10,12 @@ import { supabase } from '@/lib/supabase/client'
 import { toast } from 'react-hot-toast'
 import { useRouter } from 'next/navigation'
 
-export function CreateServerModal({ children }: { children: React.ReactNode }) {
-    const [open, setOpen] = useState(false)
+export function CreateServerModal({ children, open: controlledOpen, onOpenChange: setControlledOpen }: { children?: React.ReactNode, open?: boolean, onOpenChange?: (open: boolean) => void }) {
+    const [internalOpen, setInternalOpen] = useState(false)
+
+    const isControlled = controlledOpen !== undefined
+    const open = isControlled ? controlledOpen : internalOpen
+    const setOpen = isControlled ? setControlledOpen! : setInternalOpen
     const [name, setName] = useState('')
     const [topic, setTopic] = useState('')
     const [loading, setLoading] = useState(false)
@@ -117,9 +121,11 @@ export function CreateServerModal({ children }: { children: React.ReactNode }) {
             setOpen(val)
             if (!val) resetForm()
         }}>
-            <DialogTrigger asChild>
-                {children}
-            </DialogTrigger>
+            {children && (
+                <DialogTrigger asChild>
+                    {children}
+                </DialogTrigger>
+            )}
             <DialogContent className="bg-stone-900 border-white/10 text-white sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle className="text-center text-2xl font-serif">Customize Your Server</DialogTitle>

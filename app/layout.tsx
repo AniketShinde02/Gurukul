@@ -4,6 +4,7 @@ import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from 'react-hot-toast'
 import { Analytics } from '@vercel/analytics/next'
+import { QueryProvider } from '@/components/providers/QueryProvider'
 
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' })
 const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair' })
@@ -33,7 +34,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <QueryProvider>
+            {children}
+          </QueryProvider>
           <Toaster
             position="top-right"
             toastOptions={{

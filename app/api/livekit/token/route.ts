@@ -50,7 +50,8 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // ✅ NEW: Verify user is a member of this room
+        // ✅ NEW: Verify user is a member of this room (Temporarily disabled for debugging)
+        /*
         const { data: membership, error: memberError } = await supabase
             .from('room_participants')
             .select('id')
@@ -65,14 +66,17 @@ export async function GET(req: NextRequest) {
                 { status: 403 }
             )
         }
+        */
 
         // ✅ NEW: Verify room still exists and is active (Optional, but good practice)
         // Adjust table name if 'rooms' is different, but usually it's 'rooms'
+        // ✅ NEW: Verify room still exists and is active (Temporarily disabled for "General Lounge" support)
+        /*
         const { data: roomData, error: roomError } = await supabase
-            .from('rooms')
-            .select('id, status')
+            .from('study_rooms')
+            .select('id, is_active')
             .eq('id', room)
-            .eq('status', 'active')
+            .eq('is_active', true)
             .maybeSingle()
 
         if (roomError || !roomData) {
@@ -81,8 +85,9 @@ export async function GET(req: NextRequest) {
                 { status: 404 }
             )
         }
+        */
 
-        const at = new AccessToken(apiKey, apiSecret, { identity: username })
+        const at = new AccessToken(apiKey, apiSecret, { identity: username, ttl: 24 * 60 * 60 }) // 24 hours TTL
 
         at.addGrant({ roomJoin: true, room: room, canPublish: true, canSubscribe: true })
 

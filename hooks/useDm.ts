@@ -306,7 +306,7 @@ export function useDm() {
             toast.success('Sent!', { id: toastId })
         } catch (error) {
             console.error('Upload error:', error)
-            toast.error('Failed to upload', { id: toastId })
+            toast.error((error as Error).message || 'Failed to upload', { id: toastId })
             setMessages(prev => prev.filter(m => m.id !== tempId))
         }
     }
@@ -343,6 +343,8 @@ export function useDm() {
                 return null
             }
 
+            // Force refresh conversations to ensure the new one exists in the list
+            await fetchConversations()
             setActiveConversationId(data.conversationId)
             return data.conversationId
         } catch (error) {

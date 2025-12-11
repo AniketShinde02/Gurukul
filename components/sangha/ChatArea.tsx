@@ -138,7 +138,14 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
         setNewMessage(prev => prev + emojiObject.emoji)
     }
 
-    if (!activeConversation) return <div className="flex-1 bg-transparent" />
+    if (!activeConversation) return (
+        <div className="flex-1 flex items-center justify-center text-stone-500">
+            <div className="flex flex-col items-center gap-2">
+                <div className="animate-spin w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full" />
+                <p className="text-sm">Loading conversation...</p>
+            </div>
+        </div>
+    )
 
     return (
         <div

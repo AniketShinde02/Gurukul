@@ -36,6 +36,36 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
 
     useEffect(() => {
         fetchInitialData()
+
+        // Realtime subscription for online status
+        const channel = supabase
+            .channel('online_status')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'profiles',
+                },
+                (payload) => {
+                    const updatedUser = payload.new as { id: string, is_online: boolean }
+                    setBuddies(prev => {
+                        // Only update if this user is in our list
+                        const index = prev.findIndex(b => b.id === updatedUser.id)
+                        if (index === -1) return prev
+
+                        // Create new array with updated user
+                        const newBuddies = [...prev]
+                        newBuddies[index] = { ...newBuddies[index], is_online: updatedUser.is_online }
+                        return newBuddies
+                    })
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
     }, [])
 
     const fetchInitialData = async () => {
@@ -92,8 +122,8 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
                     const combined = [...prev, ...formattedBuddies]
                     const uniqueMap = new Map()
                     combined.forEach(buddy => {
-                        if (!uniqueMap.has(buddy.id)) {
-                            uniqueMap.set(buddy.id, buddy)
+                        if (!uniqueMap.has(buddy.connectionId)) {
+                            uniqueMap.set(buddy.connectionId, buddy)
                         }
                     })
                     return Array.from(uniqueMap.values())
@@ -379,7 +409,7 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
                                 )}
 
                                 {filteredBuddies.map(buddy => (
-                                    <div key={buddy.id} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl group border border-white/5 cursor-pointer transition-all" onClick={() => handleMessage(buddy.id)}>
+                                    <div key={buddy.connectionId} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl group border border-white/5 cursor-pointer transition-all" onClick={() => handleMessage(buddy.id)}>
                                         <div className="flex items-center gap-3">
                                             <div className="relative">
                                                 <Avatar className="w-10 h-10 border border-white/10">

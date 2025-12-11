@@ -41,7 +41,7 @@ export function VideoRoom({ roomName, username, onLeave, onToggleChat }: { roomN
                     <div className="relative">
                         <div className="absolute -inset-4 bg-orange-500/20 blur-xl rounded-full animate-pulse" />
                         <h2 className="text-5xl font-sanskrit font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-200 relative z-10 animate-in fade-in zoom-in duration-1000 py-4 leading-relaxed">
-                            अंकीय गुरुकुलम् प्रविशति
+                            Entering Digital Gurukul...
                         </h2>
                     </div>
                     <p className="text-stone-500 mt-4 font-mono text-xs tracking-widest uppercase opacity-70">
