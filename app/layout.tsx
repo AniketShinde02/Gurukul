@@ -3,6 +3,7 @@ import { Outfit, Playfair_Display, Tiro_Devanagari_Sanskrit } from 'next/font/go
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from 'react-hot-toast'
+import { Analytics } from '@vercel/analytics/next'
 
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' })
 const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair' })
@@ -45,6 +46,7 @@ export default function RootLayout({
             }}
           />
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   )
