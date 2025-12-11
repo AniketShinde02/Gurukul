@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { DmSidebar } from '@/components/sangha/DmSidebar'
 import { FriendsView } from '@/components/sangha/FriendsView'
 import { ChatArea } from '@/components/sangha/ChatArea'
 import { useDm } from '@/hooks/useDm'
 
-export default function SanghaHome() {
+// Component that uses searchParams must be wrapped in Suspense
+function SanghaContent() {
     const dmState = useDm()
     const searchParams = useSearchParams()
 
@@ -47,5 +48,17 @@ export default function SanghaHome() {
                 )}
             </div>
         </div>
+    )
+}
+
+export default function SanghaHome() {
+    return (
+        <Suspense fallback={
+            <div className="flex-1 flex items-center justify-center h-full bg-black/20">
+                <div className="text-white/60">Loading...</div>
+            </div>
+        }>
+            <SanghaContent />
+        </Suspense>
     )
 }
