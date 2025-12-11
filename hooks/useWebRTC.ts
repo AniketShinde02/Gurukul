@@ -22,7 +22,10 @@ type WebRTCState = {
 export const useWebRTC = (
     sessionId: string | null,
     currentUserId: string,
-    studyMode: 'video' | 'audio' = 'video'
+    studyMode: 'video' | 'audio' = 'video',
+    customSignaling?: {
+        sendSignal: (signal: any) => void
+    }
 ) => {
     const [state, setState] = useState<WebRTCState>({
         localStream: null,
@@ -80,6 +83,13 @@ export const useWebRTC = (
         const activeSessionId = sessionIdRef.current
         if (!activeSessionId || !currentUserId) return
 
+        // Use Custom Signaling (WebSocket) if available
+        if (customSignaling?.sendSignal) {
+            customSignaling.sendSignal(signal);
+            return;
+        }
+
+        // Fallback to Supabase
         try {
             await supabase.from('messages').insert({
                 session_id: activeSessionId,
@@ -90,7 +100,7 @@ export const useWebRTC = (
         } catch (error) {
             console.error('Failed to send signal:', error)
         }
-    }, [currentUserId])
+    }, [currentUserId, customSignaling])
 
     // Initialize Peer Connection
     const initializePeerConnection = useCallback(async (overrideSessionId?: string) => {

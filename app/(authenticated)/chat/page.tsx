@@ -29,7 +29,8 @@ import { VideoCall } from '@/components/chat/VideoCall';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 
 // Feature flag: Set to true in .env.local to use WebSocket-based matchmaking
-const USE_WS_MATCHMAKING = process.env.NEXT_PUBLIC_USE_WS_MATCHMAKING === 'true';
+// This is now the DEFAULT starting state, but can be overridden by DB settings
+const ENV_WS_ENABLED = process.env.NEXT_PUBLIC_USE_WS_MATCHMAKING === 'true';
 
 type MatchMode = 'buddies_first' | 'global';
 
@@ -41,6 +42,34 @@ export default function ChatPage() {
     const [matchMode, setMatchMode] = useState<MatchMode>('buddies_first');
     const [studyMode, setStudyMode] = useState<'video' | 'audio'>('video');
 
+    // System Settings State
+    const [useWS, setUseWS] = useState(ENV_WS_ENABLED);
+
+    // Check DB for matchmaking mode
+    useEffect(() => {
+        const checkSettings = async () => {
+            try {
+                const { data } = await supabase
+                    .from('system_settings')
+                    .select('value')
+                    .eq('key', 'matchmaking_config')
+                    .maybeSingle();
+
+                if (data?.value?.mode) {
+                    const dbSaysWS = data.value.mode === 'websocket';
+                    // Only update if different from env default
+                    if (dbSaysWS !== useWS) {
+                        setUseWS(dbSaysWS);
+                        console.log(`🔄 Matchmaking switched to: ${dbSaysWS ? 'WebSocket (Turbo)' : 'Supabase (Legacy)'}`);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to check system settings:', err);
+            }
+        };
+        checkSettings();
+    }, []);
+
     // Chat State
     const [messages, setMessages] = useState<Message[]>([]);
     const [isChatOpen, setIsChatOpen] = useState(false);
@@ -50,9 +79,18 @@ export default function ChatPage() {
     const channelRef = useRef<any>(null);
     const sessionIdRef = useRef<string | null>(null);
 
-    // Matchmaking Hooks (conditional based on feature flag)
+    // Matchmaking Hooks
+    // newMatchmaking is only "enabled" if useWS is true
     const oldMatchmaking = useMatchmaking(currentUserId);
-    const newMatchmaking = useMatchmakingWS(currentUserId);
+    const newMatchmaking = useMatchmakingWS(currentUserId, useWS);
+
+    // Auto-fallback if WS fails repeatedly
+    useEffect(() => {
+        if (useWS && newMatchmaking.error && newMatchmaking.error.includes('Failed to connect')) {
+            toast.error('Connection unstable. Falling back to legacy matchmaking.');
+            setUseWS(false);
+        }
+    }, [useWS, newMatchmaking.error]);
 
     // Use the selected matchmaking system
     const {
@@ -65,15 +103,15 @@ export default function ChatPage() {
         skipPartner: rawSkipPartner,
         endSession,
         setStatus: setMatchStatus
-    } = USE_WS_MATCHMAKING ? newMatchmaking : oldMatchmaking;
+    } = useWS ? newMatchmaking : oldMatchmaking;
 
     // Get sendSignal from WS hook (for WebRTC signaling via WebSocket)
-    const sendSignal = USE_WS_MATCHMAKING ? newMatchmaking.sendSignal : undefined;
-    const isInitiator = USE_WS_MATCHMAKING ? newMatchmaking.isInitiator : undefined;
+    const sendSignal = useWS ? newMatchmaking.sendSignal : undefined;
+    const isInitiator = useWS ? newMatchmaking.isInitiator : undefined;
 
     // Wrapper for startMatching to handle different signatures
     const startMatching = (mode: MatchMode) => {
-        if (USE_WS_MATCHMAKING) {
+        if (useWS) {
             (rawStartMatching as any)(mode, []);
         } else {
             rawStartMatching(mode);
@@ -82,7 +120,7 @@ export default function ChatPage() {
 
     // Wrapper for skipPartner
     const skipPartner = () => {
-        if (USE_WS_MATCHMAKING) {
+        if (useWS) {
             (rawSkipPartner as any)(matchMode);
         } else {
             (rawSkipPartner as any)();
@@ -102,7 +140,22 @@ export default function ChatPage() {
         startCall,
         handleSignal,
         initializePeerConnection
-    } = useWebRTC(sessionId, currentUserId, studyMode);
+    } = useWebRTC(sessionId, currentUserId, studyMode, useWS && sendSignal ? { sendSignal } : undefined);
+
+    // Listen for WebSocket WebRTC signals
+    useEffect(() => {
+        if (!useWS) return;
+
+        const handleWSSignal = async (event: CustomEvent) => {
+            const signal = event.detail;
+            if (sessionId) {
+                await handleSignal(signal, sessionId);
+            }
+        };
+
+        window.addEventListener('webrtc-signal', handleWSSignal as unknown as EventListener);
+        return () => window.removeEventListener('webrtc-signal', handleWSSignal as unknown as EventListener);
+    }, [useWS, sessionId, handleSignal]);
 
     /**
      * Check friend connection status

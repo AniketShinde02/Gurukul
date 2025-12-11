@@ -1,0 +1,7 @@
+[build]
+builder = "nixpacks"
+watchPatterns = ["server.ts", "package.json", "tsconfig.json"]
+
+[deploy]
+startCommand = "npm start"
+restartPolicyType = "on_failure"

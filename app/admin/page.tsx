@@ -33,10 +33,17 @@ export default function AdminDashboard() {
                 .single();
 
             if (error) throw error;
-            if (data) setConfig(data.value);
+            if (data) {
+                setConfig(data.value);
+            } else {
+                // Default if no settings exist
+                setConfig({ mode: 'supabase', ws_url: 'ws://localhost:8080' });
+            }
         } catch (err) {
             console.error('Error fetching settings:', err);
             toast.error('Failed to load settings');
+            // Fallback
+            setConfig({ mode: 'supabase', ws_url: 'ws://localhost:8080' });
         } finally {
             setLoading(false);
         }
@@ -122,7 +129,7 @@ export default function AdminDashboard() {
                                 <h3 className="font-bold">WebSocket (Turbo)</h3>
                             </div>
                             <p className="text-sm text-muted-foreground">
-                                Takes 10k+ users. Uses Railway server. Zero DB load. Instant <5ms matches.
+                                Takes 10k+ users. Uses Railway server. Zero DB load. Instant 5ms matches.
                             </p>
                             {config?.mode === 'websocket' && wsCount !== null && (
                                 <div className="mt-2 text-xs text-green-600 font-mono">

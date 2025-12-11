@@ -137,6 +137,8 @@ export function useMatchmakingWS(userId: string, enabled: boolean = true) {
             return; // Already connected
         }
 
+        if (!enabled) return;
+
         try {
             const ws = new WebSocket(WS_SERVER_URL);
             wsRef.current = ws;
