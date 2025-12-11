@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { MessageSquare, UserPlus, MoreHorizontal, Check, X } from 'lucide-react'
 import { useDm } from '@/hooks/useDm'
 import { toast } from 'react-hot-toast'
+import { useRouter } from 'next/navigation'
 
 type Buddy = {
     id: string
@@ -22,6 +23,7 @@ type Request = {
 }
 
 export function BuddyList() {
+    const router = useRouter()
     const [buddies, setBuddies] = useState<Buddy[]>([])
     const [requests, setRequests] = useState<Request[]>([])
     const [loading, setLoading] = useState(true)
@@ -91,9 +93,11 @@ export function BuddyList() {
     const handleMessage = async (buddyId: string) => {
         const conversationId = await startDm(buddyId)
         if (conversationId) {
-            toast.success('Conversation started! Check Messages.')
-            const dmSection = document.getElementById('dm-section')
-            if (dmSection) dmSection.scrollIntoView({ behavior: 'smooth' })
+            // Redirect to Sangha page with conversation ID
+            // Since SanghaHome doesn't read URL params yet (we will fix this next), 
+            // the user will land on the friends list. Ideally we fix SanghaHome too.
+            // But for now, getting them to the chat page is better than staying here.
+            router.push(`/sangha?conversation=${conversationId}`)
         }
     }
 

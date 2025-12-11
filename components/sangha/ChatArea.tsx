@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useDm } from '@/hooks/useDm'
+import { useSound } from '@/hooks/useSound'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Phone, Video, Info, PlusCircle, Smile, Gift, Sticker, Trash2, MoreVertical, X, Image as ImageIcon, FileText, Paperclip, Copy } from 'lucide-react'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
@@ -30,6 +31,7 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
         setActiveConversationId
     } = useDm()
 
+    const { play } = useSound()
     const [newMessage, setNewMessage] = useState('')
     const [showEmojiPicker, setShowEmojiPicker] = useState(false)
     const [showGifPicker, setShowGifPicker] = useState(false)
@@ -40,6 +42,7 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
     const emojiPickerRef = useRef<HTMLDivElement>(null)
     const gifPickerRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const prevMessagesLengthRef = useRef(0)
 
     // Drag & Drop Handlers
     const onDragOver = useCallback((e: React.DragEvent) => {
@@ -88,7 +91,15 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight
         }
-    }, [messages.length, conversationId])
+        // Play receive sound for new messages from others
+        if (messages.length > prevMessagesLengthRef.current) {
+            const latestMessage = messages[messages.length - 1]
+            if (latestMessage && latestMessage.sender_id !== currentUserId) {
+                play('MESSAGE_ROOM')
+            }
+        }
+        prevMessagesLengthRef.current = messages.length
+    }, [messages.length, conversationId, currentUserId, play])
 
     // Close pickers when clicking outside
     useEffect(() => {
@@ -112,12 +123,14 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
         e.preventDefault()
         if (!newMessage.trim()) return
         sendMessage(newMessage)
+        play('MESSAGE_SEND')
         setNewMessage('')
         setShowEmojiPicker(false)
     }
 
     const handleSendGif = (url: string) => {
         sendMessage(url, 'image') // Sending as image type for now, or 'gif' if supported by backend
+        play('MESSAGE_SEND')
         setShowGifPicker(false)
     }
 

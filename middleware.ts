@@ -1,60 +1,54 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
-  let response = NextResponse.next({
-    request: {
-      headers: req.headers,
-    },
-  })
+  const path = req.nextUrl.pathname
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return req.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
-          response = NextResponse.next({
-            request: {
-              headers: req.headers,
-            },
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
+  // ✅ List of protected routes that require auth
+  const protectedRoutes = [
+    '/dashboard',
+    '/chat',
+    '/profile',
+    '/sangha',
+    '/settings',
+    '/rooms'
+  ]
+
+  // ✅ Check if current path is protected
+  const isProtected = protectedRoutes.some(route => path.startsWith(route))
+
+  if (!isProtected) {
+    // ✅ Skip middleware for public routes - no DB calls
+    return NextResponse.next()
+  }
+
+  // ✅ Lightweight check: verify if ANY Supabase auth cookie exists
+  // Supabase cookies are named like: sb-<project-ref>-auth-token
+  const allCookies = req.cookies.getAll()
+  const hasAuthCookie = allCookies.some(cookie =>
+    cookie.name.startsWith('sb-') && cookie.name.includes('auth-token')
   )
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-
-  // Protect dashboard routes
-  if (req.nextUrl.pathname.startsWith('/dashboard') ||
-    req.nextUrl.pathname.startsWith('/chat') ||
-    req.nextUrl.pathname.startsWith('/profile')) {
-    if (!session) {
-      return NextResponse.redirect(new URL('/', req.url))
-    }
+  if (!hasAuthCookie) {
+    // ✅ No DB needed: missing cookie = not authenticated
+    // Redirect to home page where AuthModal can be triggered
+    return NextResponse.redirect(new URL('/', req.url))
   }
 
-  // Redirect authenticated users away from auth pages
-  if (req.nextUrl.pathname.startsWith('/auth') && session) {
-    return NextResponse.redirect(new URL('/dashboard', req.url))
-  }
-
-  return response
+  // ✅ For full user verification, do it in Server Component or route handler
+  // Don't do database lookups in middleware - they block every request
+  return NextResponse.next()
 }
 
 export const config = {
+  // ✅ Be specific: only apply to pages that need auth
+  // Don't run middleware on static files, images, API routes, etc.
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/dashboard/:path*',
+    '/chat/:path*',
+    '/profile/:path*',
+    '/sangha/:path*',
+    '/settings/:path*',
+    '/rooms/:path*',
   ],
 }

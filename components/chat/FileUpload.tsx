@@ -26,12 +26,12 @@ export function FileUpload({ sessionId, onUploadStart, onUploadEnd, onClose }: F
     // Validate file type
     const allowedTypes = [
       'image/jpeg',
-      'image/png', 
+      'image/png',
       'image/gif',
       'image/webp',
       'application/pdf'
     ]
-    
+
     if (!allowedTypes.includes(file.type)) {
       toast.error('Only images (JPG, PNG, GIF, WebP) and PDF files are allowed')
       return
@@ -54,25 +54,45 @@ export function FileUpload({ sessionId, onUploadStart, onUploadEnd, onClose }: F
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // Create FormData for upload
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('sessionId', sessionId)
-
-      // Upload to our API endpoint
-      const response = await fetch('/api/upload', {
+      // 1️⃣ Get Presigned Upload URL (Metadata only)
+      const initResponse = await fetch('/api/upload', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          filetype: file.type,
+          filesize: file.size,
+          sessionId
+        }),
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || 'Upload failed')
+      if (!initResponse.ok) {
+        const error = await initResponse.json()
+        throw new Error(error.message || 'Failed to get upload URL')
       }
 
-      const { fileUrl, fileName } = await response.json()
+      const { uploadUrl, path, fileName } = await initResponse.json()
 
-      // Save message to database
+      // 2️⃣ Upload Directly to Supabase Storage
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      })
+
+      if (!uploadResponse.ok) {
+        throw new Error('Direct upload to storage failed')
+      }
+
+      // 3️⃣ Get Viewable URL (Signed Download URL)
+      const urlResponse = await fetch(`/api/upload?path=${encodeURIComponent(path)}`)
+      if (!urlResponse.ok) throw new Error('Failed to get viewable URL')
+
+      const { publicUrl } = await urlResponse.json()
+
+      // 4️⃣ Save message to database
       const { error } = await supabase
         .from('messages')
         .insert({
@@ -80,7 +100,7 @@ export function FileUpload({ sessionId, onUploadStart, onUploadEnd, onClose }: F
           sender_id: user.id,
           content: `Shared a ${file.type.startsWith('image/') ? 'image' : 'file'}`,
           type: file.type.startsWith('image/') ? 'image' : 'file',
-          file_url: fileUrl,
+          file_url: publicUrl, // This is a signed URL valid for 24h
           file_name: fileName,
         })
 
@@ -133,11 +153,10 @@ export function FileUpload({ sessionId, onUploadStart, onUploadEnd, onClose }: F
       </div>
 
       <div
-        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-          dragActive
+        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${dragActive
             ? 'border-primary bg-primary/5'
             : 'border-gray-300 dark:border-gray-600'
-        }`}
+          }`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}

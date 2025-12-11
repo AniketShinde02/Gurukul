@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { ParticipantGrid } from './ParticipantGrid';
 import { awardXP, XP_RATES } from '@/lib/xp';
 import { supabase } from '@/lib/supabase/client';
+import { useSound } from '@/hooks/useSound';
 
 interface CallContextType {
     joinRoom: (room: string) => void;
@@ -51,6 +52,7 @@ export function GlobalCallManager({ children, username }: { children: ReactNode,
     const [videoContainer, setVideoContainer] = useState<HTMLElement | null>(null);
     const [mounted, setMounted] = useState(false);
     const intentionalDisconnect = useRef(false);
+    const { play } = useSound();
 
     useEffect(() => {
         setMounted(true);
@@ -72,11 +74,12 @@ export function GlobalCallManager({ children, username }: { children: ReactNode,
 
     const leaveRoom = useCallback(() => {
         intentionalDisconnect.current = true;
+        play('CALL_DISCONNECT');
         setRoomName(null);
         setToken('');
         setConnectionState('idle');
         setIsMinimized(false);
-    }, []);
+    }, [play]);
 
     const joinRoom = useCallback(async (room: string) => {
         if (roomName === room && connectionState !== 'idle') {
@@ -140,7 +143,10 @@ export function GlobalCallManager({ children, username }: { children: ReactNode,
                                 }
                             }}
                             style={{ height: '100%' }}
-                            onConnected={() => setConnectionState('connected')}
+                            onConnected={() => {
+                                setConnectionState('connected')
+                                play('CALL_CONNECT')
+                            }}
                             onDisconnected={handleDisconnected}
                         >
                             {connectionState === 'connecting' && !isMinimized && !videoContainer && (

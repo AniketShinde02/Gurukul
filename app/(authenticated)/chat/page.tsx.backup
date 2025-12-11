@@ -1,0 +1,561 @@
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { supabase } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Loader2, MessageSquare, UserPlus, Home, RefreshCw, Users, Globe } from 'lucide-react'
+import { toast } from 'react-hot-toast'
+import type { Message } from '@/types/chat.types'
+import { useWebRTC } from '@/hooks/useWebRTC'
+import { useSound } from '@/hooks/useSound'
+import { VideoCall } from '@/components/chat/VideoCall'
+import { ChatSidebar } from '@/components/chat/ChatSidebar'
+
+type ChatStatus = 'idle' | 'searching' | 'connected' | 'ended'
+type MatchMode = 'buddies_first' | 'global'
+
+export default function ChatPage() {
+    const router = useRouter()
+
+    // Chat State
+    const [status, setStatus] = useState<ChatStatus>('idle')
+    const [sessionId, setSessionId] = useState<string | null>(null)
+    const [messages, setMessages] = useState<Message[]>([])
+    const [currentUserId, setCurrentUserId] = useState<string>('')
+    const [partnerId, setPartnerId] = useState<string | null>(null)
+    const [otherUserTyping, setOtherUserTyping] = useState(false)
+    const [connectionStatus, setConnectionStatus] = useState<'none' | 'pending' | 'accepted'>('none')
+
+    // Check connection status when partnerId is set
+    useEffect(() => {
+        if (!partnerId || !currentUserId) {
+            setConnectionStatus('none')
+            return
+        }
+
+        const checkConnection = async () => {
+            const { data } = await supabase
+                .from('study_connections')
+                .select('status')
+                .or(`and(requester_id.eq.${currentUserId},receiver_id.eq.${partnerId}),and(requester_id.eq.${partnerId},receiver_id.eq.${currentUserId})`)
+                .single()
+
+            if (data) {
+                setConnectionStatus(data.status as any)
+            } else {
+                setConnectionStatus('none')
+            }
+        }
+
+        checkConnection()
+    }, [partnerId, currentUserId])
+
+    // Settings
+    const [studyMode, setStudyMode] = useState<'video' | 'audio'>('video')
+    const [matchMode, setMatchMode] = useState<MatchMode>('buddies_first')
+    const [selectedSubjects, setSelectedSubjects] = useState<string[]>([])
+    const [selectedLanguage, setSelectedLanguage] = useState<string>('English')
+
+    // UI State
+    const [isChatOpen, setIsChatOpen] = useState(false)
+
+    // WebRTC Hook
+    const {
+        localStream,
+        remoteStream,
+        isMicOn,
+        isCameraOn,
+        isCallActive,
+        connectionState,
+        toggleMic,
+        toggleCamera,
+        endCall,
+        startCall,
+        handleSignal,
+        initializePeerConnection
+    } = useWebRTC(sessionId, currentUserId, studyMode)
+
+    const channelRef = useRef<any>(null)
+    const matchPollingRef = useRef<NodeJS.Timeout | null>(null)
+    const sessionIdRef = useRef<string | null>(null)
+    const { play } = useSound()
+    const searchingSoundRef = useRef<HTMLAudioElement | null>(null)
+
+    // Cleanup Session
+    const endChat = async () => {
+        console.log('🛑 Ending chat session')
+        await endCall() // Cleanup WebRTC
+        play('CALL_DISCONNECT')
+
+        if (sessionIdRef.current) {
+            await supabase.from('chat_sessions').update({ status: 'ended' }).eq('id', sessionIdRef.current)
+        }
+
+        if (channelRef.current) {
+            supabase.removeChannel(channelRef.current)
+            channelRef.current = null
+        }
+
+        setStatus('ended') // Go to post-call screen
+        setSessionId(null)
+        sessionIdRef.current = null
+        setMessages([])
+        setIsChatOpen(false)
+    }
+
+    const handleAddFriend = async () => {
+        if (!partnerId || !currentUserId) return
+        try {
+            const { error } = await supabase.from('study_connections').insert({
+                requester_id: currentUserId,
+                receiver_id: partnerId,
+                status: 'pending'
+            })
+            if (error) throw error
+            toast.success('Friend request sent!')
+            setConnectionStatus('pending')
+        } catch (error: any) {
+            if (error.code === '23505') { // Unique violation
+                toast.error('Request already sent or connected')
+                // Re-fetch status to be sure
+                const { data } = await supabase
+                    .from('study_connections')
+                    .select('status')
+                    .or(`and(requester_id.eq.${currentUserId},receiver_id.eq.${partnerId}),and(requester_id.eq.${partnerId},receiver_id.eq.${currentUserId})`)
+                    .single()
+                if (data) setConnectionStatus(data.status as any)
+            } else {
+                toast.error('Failed to send request')
+            }
+        }
+    }
+
+    const resetToIdle = () => {
+        setStatus('idle')
+        setPartnerId(null)
+    }
+
+    // Handle Incoming Messages
+    const handleIncomingMessage = async (message: Message) => {
+        if (message.sender_id === currentUserId) return
+
+        try {
+            const content = JSON.parse(message.content || '{}')
+            const currentSessionId = sessionIdRef.current
+
+            if (!currentSessionId) return
+
+            // Handle System Signals
+            if (content.type === 'system' && content.status === 'ready') {
+                console.log('✅ Partner is ready!')
+
+                // Fetch session to get partner ID and determine initiator
+                const { data: session, error } = await supabase
+                    .from('chat_sessions')
+                    .select('user1_id, user2_id')
+                    .eq('id', currentSessionId)
+                    .single()
+
+                if (error || !session) return
+
+                // Identify partner
+                const pid = session.user1_id === currentUserId ? session.user2_id : session.user1_id
+                setPartnerId(pid)
+
+                if (session.user1_id === currentUserId) {
+                    console.log('🚀 Initiating call as User 1')
+                    await startCall(currentSessionId)
+                }
+            }
+            // Handle WebRTC Signals
+            else if (['offer', 'answer', 'ice-candidate', 'call-ended'].includes(content.type)) {
+                await handleSignal(content, currentSessionId)
+                if (content.type === 'call-ended') {
+                    endChat()
+                }
+            }
+        } catch (e) {
+            // Normal chat message
+            console.log('💬 Received chat message')
+        }
+    }
+
+    // Connect to Session
+    const connectToSession = async (id: string) => {
+        if (sessionId === id) return
+
+        console.log('🔗 Connecting to session:', id)
+        setSessionId(id)
+        sessionIdRef.current = id
+        setStatus('connected')
+        setIsChatOpen(false)
+
+        // Initialize media immediately
+        await initializePeerConnection(id)
+        toast.success('Connected! Establishing connection...')
+
+        // Subscribe to signaling channel
+        const channel = supabase
+            .channel(`session:${id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'messages',
+                    filter: `session_id=eq.${id}`,
+                },
+                (payload) => {
+                    const newMessage = payload.new as Message
+                    setMessages((prev) => {
+                        if (prev.some(m => m.id === newMessage.id)) return prev
+                        return [...prev, newMessage]
+                    })
+                    handleIncomingMessage(newMessage)
+                }
+            )
+            .subscribe(async (status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('✅ Subscribed to signaling channel')
+                    // Send ready signal
+                    await supabase.from('messages').insert({
+                        session_id: id,
+                        sender_id: currentUserId,
+                        content: JSON.stringify({ type: 'system', status: 'ready' }),
+                        type: 'text'
+                    })
+                }
+            })
+
+        channelRef.current = channel
+    }
+
+    // Match Finding Logic
+    const handleMatchEvent = (newSessionId: string) => {
+        console.log('🎯 Match found! Session ID:', newSessionId)
+        play('MATCH_FOUND')
+
+        // Stop searching sound
+        if (searchingSoundRef.current) {
+            searchingSoundRef.current.pause()
+            searchingSoundRef.current = null
+        }
+
+        if (matchPollingRef.current) {
+            clearInterval(matchPollingRef.current)
+            matchPollingRef.current = null
+        }
+        if (channelRef.current) supabase.removeChannel(channelRef.current)
+        connectToSession(newSessionId)
+    }
+
+    const waitForMatch = (userId: string) => {
+        console.log('⏳ Waiting for match...')
+
+        // Start looping radar ping sound
+        const audio = play('CALL_INCOMING', { loop: true, volumeOverride: 0.4 })
+        if (audio) searchingSoundRef.current = audio
+
+        // Realtime subscription
+        const channel = supabase.channel(`waiting:${userId}`)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_sessions', filter: `user1_id=eq.${userId}` }, (payload) => handleMatchEvent(payload.new.id))
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_sessions', filter: `user2_id=eq.${userId}` }, (payload) => handleMatchEvent(payload.new.id))
+            .subscribe()
+        channelRef.current = channel
+
+        // Polling fallback
+        if (matchPollingRef.current) clearInterval(matchPollingRef.current)
+        matchPollingRef.current = setInterval(async () => {
+            try {
+                // Heartbeat
+                await supabase.from('waiting_queue')
+                    .update({ joined_at: new Date().toISOString() })
+                    .eq('user_id', userId)
+
+                // Check for match
+                const { data } = await supabase
+                    .from('chat_sessions')
+                    .select('id, status')
+                    .or(`user1_id.eq.${userId},user2_id.eq.${userId}`)
+                    .eq('status', 'active')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+
+                if (data) handleMatchEvent(data.id)
+            } catch (e) {
+                console.error('Polling error:', e)
+            }
+        }, 2000)
+    }
+
+    const startMatching = async () => {
+        console.log('🔍 Starting match search with mode:', matchMode)
+        setStatus('searching')
+        setMessages([])
+        setPartnerId(null)
+
+        try {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
+
+            // Clear old queue entries
+            await supabase.from('waiting_queue').delete().eq('user_id', user.id)
+
+            // Call match RPC with matchMode
+            const { data, error } = await supabase.rpc('find_match', {
+                p_user_id: user.id,
+                p_match_mode: matchMode
+            })
+
+            if (error) throw error
+
+            const result = Array.isArray(data) ? data[0] : data
+
+            if (result && result.match_found && result.session_id) {
+                connectToSession(result.session_id)
+            } else {
+                // Join queue
+                const { error: queueError } = await supabase.from('waiting_queue').upsert({
+                    user_id: user.id,
+                    match_mode: matchMode, // Store preference
+                    preferences: {
+                        subjects: selectedSubjects,
+                        language: selectedLanguage,
+                        mode: studyMode
+                    }
+                }, { onConflict: 'user_id' })
+
+                if (queueError) {
+                    console.warn('Queue join warning:', queueError)
+                }
+
+                waitForMatch(user.id)
+            }
+        } catch (error: any) {
+            console.error('Matching error:', error)
+            toast.error('Failed to start matching')
+            setStatus('idle')
+        }
+    }
+
+    const leaveQueue = async () => {
+        // Stop searching sound
+        if (searchingSoundRef.current) {
+            searchingSoundRef.current.pause()
+            searchingSoundRef.current = null
+        }
+
+        if (matchPollingRef.current) {
+            clearInterval(matchPollingRef.current)
+            matchPollingRef.current = null
+        }
+        if (channelRef.current) {
+            supabase.removeChannel(channelRef.current)
+            channelRef.current = null
+        }
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) await supabase.from('waiting_queue').delete().eq('user_id', user.id)
+        setStatus('idle')
+    }
+
+    // Initial User Check
+    useEffect(() => {
+        const getUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                setCurrentUserId(user.id)
+            } else {
+                router.push('/')
+            }
+        }
+        getUser()
+
+        return () => {
+            if (matchPollingRef.current) clearInterval(matchPollingRef.current)
+            if (channelRef.current) supabase.removeChannel(channelRef.current)
+        }
+    }, [router])
+
+    return (
+        <div className="h-[calc(100vh-8rem)] flex items-center justify-center p-4 lg:p-6">
+            <div className="w-full max-w-7xl h-full bg-black/40 border border-white/5 rounded-3xl overflow-hidden backdrop-blur-xl shadow-2xl flex relative">
+
+                {/* Left Sidebar (Chat/Matches) */}
+                <ChatSidebar
+                    status={status === 'ended' ? 'idle' : status as any}
+                    isChatOpen={isChatOpen}
+                    onCloseChat={() => setIsChatOpen(false)}
+                    messages={messages}
+                    currentUserId={currentUserId}
+                    otherUserTyping={otherUserTyping}
+                    sessionId={sessionId}
+                />
+
+                {/* Main Content Area */}
+                <div className="flex-1 flex flex-col min-w-0 bg-black/20 relative">
+                    {status === 'connected' ? (
+                        <div className="flex flex-col h-full">
+                            {/* Header */}
+                            <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-white/5 z-10">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-2.5 h-2.5 rounded-full ${connectionState === 'connected' ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
+                                    <div>
+                                        <span className="font-bold text-white text-sm">Study Session</span>
+                                        <span className="text-[10px] text-stone-400 block uppercase">
+                                            {connectionState}
+                                        </span>
+                                    </div>
+                                </div>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setIsChatOpen(!isChatOpen)}
+                                    className={isChatOpen ? 'bg-white text-black' : 'text-stone-400'}
+                                >
+                                    <MessageSquare className="w-4 h-4" />
+                                </Button>
+                            </div>
+
+                            {/* Video Call Interface */}
+                            <div className="flex-1 relative bg-black">
+                                <VideoCall
+                                    localStream={localStream}
+                                    remoteStream={remoteStream}
+                                    isMicOn={isMicOn}
+                                    isCameraOn={isCameraOn}
+                                    onToggleMic={toggleMic}
+                                    onToggleCamera={toggleCamera}
+                                    onEndCall={endChat}
+                                />
+                            </div>
+                        </div>
+                    ) : status === 'ended' ? (
+                        /* Post Call View */
+                        <div className="flex items-center justify-center h-full">
+                            <div className="text-center max-w-md space-y-8 animate-in fade-in zoom-in duration-300">
+                                <div className="w-24 h-24 rounded-full bg-white/5 mx-auto flex items-center justify-center mb-6">
+                                    <Users className="w-10 h-10 text-stone-400" />
+                                </div>
+
+                                <div>
+                                    <h2 className="text-3xl font-bold text-white mb-2">Session Ended</h2>
+                                    <p className="text-stone-400">Great job! You've completed a study session.</p>
+                                </div>
+
+                                <div className="flex flex-col gap-3">
+                                    {partnerId && (
+                                        <Button
+                                            onClick={handleAddFriend}
+                                            disabled={connectionStatus === 'accepted' || connectionStatus === 'pending'}
+                                            className={`w-full py-6 rounded-xl text-lg flex items-center justify-center gap-2 ${connectionStatus === 'accepted'
+                                                ? 'bg-green-600 hover:bg-green-700 text-white cursor-default'
+                                                : connectionStatus === 'pending'
+                                                    ? 'bg-stone-700 text-stone-400 cursor-default'
+                                                    : 'bg-orange-600 hover:bg-orange-700 text-white'
+                                                }`}
+                                        >
+                                            {connectionStatus === 'accepted' ? (
+                                                <>
+                                                    <Users className="w-5 h-5" />
+                                                    Already Friends
+                                                </>
+                                            ) : connectionStatus === 'pending' ? (
+                                                <>
+                                                    <Loader2 className="w-5 h-5" />
+                                                    Request Sent
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <UserPlus className="w-5 h-5" />
+                                                    Add Partner as Friend
+                                                </>
+                                            )}
+                                        </Button>
+                                    )}
+
+                                    <div className="flex gap-3">
+                                        <Button
+                                            onClick={resetToIdle}
+                                            variant="outline"
+                                            className="flex-1 border-white/10 hover:bg-white/5 py-6 rounded-xl"
+                                        >
+                                            <Home className="w-4 h-4 mr-2" />
+                                            Home
+                                        </Button>
+                                        <Button
+                                            onClick={startMatching}
+                                            variant="outline"
+                                            className="flex-1 border-white/10 hover:bg-white/5 py-6 rounded-xl"
+                                        >
+                                            <RefreshCw className="w-4 h-4 mr-2" />
+                                            New Match
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        /* Idle / Searching State */
+                        <div className="flex items-center justify-center h-full">
+                            <div className="text-center max-w-md">
+                                {status === 'searching' ? (
+                                    <>
+                                        <Loader2 className="w-16 h-16 animate-spin text-orange-500 mx-auto mb-6" />
+                                        <h2 className="text-3xl font-bold text-white mb-4">Finding a Partner...</h2>
+                                        <p className="text-stone-400 mb-8">
+                                            {matchMode === 'buddies_first'
+                                                ? "Checking your friends list first..."
+                                                : "Connecting you with the global community..."}
+                                        </p>
+                                        <Button onClick={leaveQueue} variant="outline" className="border-white/10 hover:bg-white/5">
+                                            Cancel Search
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <>
+                                        <h2 className="text-4xl font-bold text-white mb-2">Ready to Study?</h2>
+                                        <p className="text-stone-400 mb-8">Choose how you want to connect</p>
+
+                                        {/* Match Mode Selector */}
+                                        <div className="bg-white/5 p-1 rounded-xl flex mb-8 border border-white/10">
+                                            <button
+                                                onClick={() => setMatchMode('buddies_first')}
+                                                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium transition-all ${matchMode === 'buddies_first'
+                                                    ? 'bg-orange-600 text-white shadow-lg'
+                                                    : 'text-stone-400 hover:text-white hover:bg-white/5'
+                                                    }`}
+                                            >
+                                                <Users className="w-4 h-4" />
+                                                Buddies First
+                                            </button>
+                                            <button
+                                                onClick={() => setMatchMode('global')}
+                                                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium transition-all ${matchMode === 'global'
+                                                    ? 'bg-orange-600 text-white shadow-lg'
+                                                    : 'text-stone-400 hover:text-white hover:bg-white/5'
+                                                    }`}
+                                            >
+                                                <Globe className="w-4 h-4" />
+                                                Global
+                                            </button>
+                                        </div>
+
+                                        <Button
+                                            onClick={startMatching}
+                                            size="lg"
+                                            className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-6 text-lg rounded-full shadow-orange-500/20 shadow-lg w-full"
+                                        >
+                                            Find Partner
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}

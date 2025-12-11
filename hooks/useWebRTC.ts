@@ -37,6 +37,7 @@ export const useWebRTC = (
     const iceCandidatesQueue = useRef<RTCIceCandidate[]>([])
     const localStreamRef = useRef<MediaStream | null>(null)
     const sessionIdRef = useRef(sessionId)
+    const initPromiseRef = useRef<Promise<RTCPeerConnection | null> | null>(null)
 
     // Keep ref in sync with prop
     useEffect(() => {
@@ -101,62 +102,84 @@ export const useWebRTC = (
             return peerConnection.current
         }
 
-        try {
-            console.log('🚀 Initializing PeerConnection')
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: studyMode === 'video',
-                audio: true
-            })
-
-            localStreamRef.current = stream
-            updateState({ localStream: stream })
-
-            const pc = new RTCPeerConnection(RTC_CONFIG)
-
-            // Add tracks
-            stream.getTracks().forEach(track => {
-                pc.addTrack(track, stream)
-            })
-
-            // Handle remote tracks
-            pc.ontrack = (event) => {
-                console.log('🎥 Received remote track:', event.track.kind)
-                const [remote] = event.streams
-                if (remote) {
-                    updateState({ remoteStream: remote })
-                }
-            }
-
-            // Handle ICE candidates
-            pc.onicecandidate = (event) => {
-                if (event.candidate) {
-                    sendSignal({ type: 'ice-candidate', candidate: event.candidate })
-                }
-            }
-
-            // Connection state changes
-            pc.onconnectionstatechange = () => {
-                console.log('🔄 Connection state:', pc.connectionState)
-                updateState({ connectionState: pc.connectionState })
-
-                if (pc.connectionState === 'connected') {
-                    updateState({ isCallActive: true })
-                    toast.success('Connected!')
-                } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-                    // Don't auto-cleanup here immediately to allow for reconnection attempts or explicit end
-                    // But for now, let's just log it.
-                    console.warn('Connection failed or disconnected')
-                }
-            }
-
-            peerConnection.current = pc
-            return pc
-
-        } catch (error: any) {
-            console.error('Failed to initialize peer connection:', error)
-            toast.error(`Media Error: ${error.message}`)
-            return null
+        // Check if already initializing (Race condition fix)
+        if (initPromiseRef.current) {
+            console.log('⏳ Already initializing, waiting for existing promise...')
+            return initPromiseRef.current
         }
+
+        console.log('🚀 Initializing PeerConnection')
+
+        initPromiseRef.current = (async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: studyMode === 'video',
+                    audio: true
+                })
+
+                localStreamRef.current = stream
+                updateState({ localStream: stream })
+
+                const pc = new RTCPeerConnection(RTC_CONFIG)
+
+                // Add tracks
+                stream.getTracks().forEach(track => {
+                    pc.addTrack(track, stream)
+                })
+
+                // Handle remote tracks
+                pc.ontrack = (event) => {
+                    console.log('🎥 Received remote track:', event.track.kind)
+                    const [remote] = event.streams
+                    if (remote) {
+                        updateState({ remoteStream: remote })
+                    }
+                }
+
+                // Handle ICE candidates
+                pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        sendSignal({ type: 'ice-candidate', candidate: event.candidate })
+                    }
+                }
+
+                // Connection state changes
+                pc.onconnectionstatechange = () => {
+                    console.log('🔄 Connection state:', pc.connectionState)
+                    updateState({ connectionState: pc.connectionState })
+
+                    if (pc.connectionState === 'connected') {
+                        updateState({ isCallActive: true })
+                        toast.success('Connected!')
+                    } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+                        console.warn('Connection failed or disconnected')
+                    }
+                }
+
+                peerConnection.current = pc
+                return pc
+
+            } catch (error: any) {
+                console.error('Failed to initialize peer connection:', error);
+
+                let friendlyMessage = 'Failed to access camera/microphone';
+
+                if (error.name === 'NotReadableError' || error.message.includes('Device in use')) {
+                    friendlyMessage = 'Camera is being used by another app or tab. Please close other video apps and try again.';
+                } else if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    friendlyMessage = 'Camera/microphone access denied. Please allow permissions and refresh.';
+                } else if (error.name === 'NotFoundError') {
+                    friendlyMessage = 'No camera/microphone found. Please connect a device.';
+                }
+
+                toast.error(friendlyMessage);
+                return null;
+            } finally {
+                initPromiseRef.current = null;
+            }
+        })();
+
+        return initPromiseRef.current;
     }, [studyMode, sendSignal])
 
     // Handle incoming signals

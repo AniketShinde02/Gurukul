@@ -4,39 +4,40 @@ import { createClient } from '@/lib/supabase/server'
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
-    
-    // Get current user
+
+    // ✅ Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if user is already in queue
-    const { data: existingQueue } = await supabase
-      .from('waiting_queue')
-      .select('*')
-      .eq('user_id', user.id)
-      .single()
+    // ✅ (Removed blocking check - we now clear stale entries instead)
 
-    if (existingQueue) {
-      return NextResponse.json({ message: 'Already in queue' })
-    }
-
-    // Check if user has an active session
+    // ✅ Check if user has an active session
     const { data: activeSession } = await supabase
       .from('chat_sessions')
-      .select('*')
+      .select('id')  // ✅ Only need id
       .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
       .eq('status', 'active')
+      .limit(1)
       .single()
 
     if (activeSession) {
-      return NextResponse.json({ 
-        error: 'You already have an active chat session' 
-      }, { status: 400 })
+      // ✅ Auto-end the stale session instead of blocking
+      console.log('Auto-ending stale session:', activeSession.id)
+      await supabase
+        .from('chat_sessions')
+        .update({ status: 'ended', ended_at: new Date().toISOString() })
+        .eq('id', activeSession.id)
     }
 
-    // Add user to queue
+    // ✅ Clear any stale queue entries for this user first
+    await supabase
+      .from('waiting_queue')
+      .delete()
+      .eq('user_id', user.id)
+
+    // ✅ Add user to queue (fresh entry)
     const { error: queueError } = await supabase
       .from('waiting_queue')
       .insert({
@@ -49,8 +50,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to join queue' }, { status: 500 })
     }
 
-    // Try to find a match
-    await findMatch(user.id)
+    // ✅ Get matchMode if provided
+    const json = await request.json().catch(() => ({}))
+    const matchMode = json.matchMode || 'buddies_first'
+
+    // ✅ Try to find a match (async, don't wait)
+    findMatch(user.id, matchMode).catch(err => console.error('Match error:', err))
 
     return NextResponse.json({ message: 'Joined queue successfully' })
   } catch (error) {
@@ -59,95 +64,52 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function findMatch(currentUserId: string) {
+async function findMatch(currentUserId: string, matchMode: string = 'buddies_first') {
   const supabase = await createClient()
 
   try {
-    // Get all users in queue, ordered by join time
-    const { data: queueUsers, error: queueError } = await supabase
-      .from('waiting_queue')
-      .select('*')
-      .order('joined_at', { ascending: true })
-
-    if (queueError) {
-      console.error('Error fetching queue:', queueError)
-      return
-    }
-
-    if (!queueUsers || queueUsers.length < 2) {
-      return // Not enough users to match
-    }
-
-    // Find the oldest user in queue (excluding current user)
-    const otherUser = queueUsers.find(user => user.user_id !== currentUserId)
-    if (!otherUser) {
-      return
-    }
-
-    // Create chat session
-    const { data: session, error: sessionError } = await supabase
-      .from('chat_sessions')
-      .insert({
-        user1_id: currentUserId,
-        user2_id: otherUser.user_id,
-        started_at: new Date().toISOString(),
-        status: 'active',
+    // ✅ Use Production-Grade Matchmaking Function (Uses SKIP LOCKED)
+    const { data, error } = await supabase
+      .rpc('find_match', {
+        p_user_id: currentUserId,
+        p_match_mode: matchMode
       })
-      .select()
-      .single()
 
-    if (sessionError) {
-      console.error('Error creating session:', sessionError)
+    if (error) {
+      console.error('Match error:', error)
       return
     }
 
-    // Remove both users from queue
-    await supabase
-      .from('waiting_queue')
-      .delete()
-      .in('user_id', [currentUserId, otherUser.user_id])
+    // The RPC returns a table/list, but we generally expect 1 row
+    const result = Array.isArray(data) ? data[0] : data
 
-    // Update user stats - get current values first
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, total_chats')
-      .in('id', [currentUserId, otherUser.user_id])
+    if (!result || !result.match_found || !result.session_id) {
+      // No match found immediately, that's fine.
+      return
+    }
 
-    if (profiles) {
-      for (const profile of profiles) {
-        await supabase
-          .from('profiles')
-          .update({ 
-            total_chats: (profile.total_chats || 0) + 1,
-            is_online: true,
-            last_seen: new Date().toISOString()
-          })
-          .eq('id', profile.id)
+    // ✅ Match Found! Notify both users via realtime
+    const channel = supabase.channel('matching')
+
+    // Notify Self
+    await channel.send({
+      type: 'broadcast',
+      event: 'match_found',
+      payload: {
+        sessionId: result.session_id,
+        userId: currentUserId,
       }
-    }
+    })
 
-    // Notify both users via realtime
-    await supabase
-      .channel('matching')
-      .send({
-        type: 'broadcast',
-        event: 'match_found',
-        payload: {
-          sessionId: session.id,
-          userId: currentUserId,
-        }
-      })
-
-    await supabase
-      .channel('matching')
-      .send({
-        type: 'broadcast',
-        event: 'match_found',
-        payload: {
-          sessionId: session.id,
-          userId: otherUser.user_id,
-        }
-      })
+    // Notify Partner
+    await channel.send({
+      type: 'broadcast',
+      event: 'match_found',
+      payload: {
+        sessionId: result.session_id,
+        userId: result.partner_id,
+      }
+    })
 
   } catch (error) {
     console.error('Error in findMatch:', error)

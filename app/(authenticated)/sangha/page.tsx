@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { DmSidebar } from '@/components/sangha/DmSidebar'
 import { FriendsView } from '@/components/sangha/FriendsView'
 import { ChatArea } from '@/components/sangha/ChatArea'
@@ -8,12 +9,16 @@ import { useDm } from '@/hooks/useDm'
 
 export default function SanghaHome() {
     const dmState = useDm()
+    const searchParams = useSearchParams()
 
     // Sync activeConversationId with view state
     useEffect(() => {
-        // When conversation changes, update the view
-        // This allows the DM sidebar to control what's shown
-    }, [dmState.activeConversationId])
+        // Check for conversation ID in URL on mount
+        const conversationId = searchParams.get('conversation')
+        if (conversationId && !dmState.activeConversationId) {
+            dmState.setActiveConversationId(conversationId)
+        }
+    }, [searchParams, dmState.activeConversationId])
 
     return (
         <div className="flex-1 flex overflow-hidden h-full relative">
@@ -23,7 +28,7 @@ export default function SanghaHome() {
             </div>
 
             {/* Main Content */}
-            <div className={`flex-1 flex overflow-hidden h-full bg-black/20 ${dmState.activeConversationId ? 'hidden md:flex' : 'flex'}`}>
+            <div className={`flex-1 flex overflow-hidden h-full bg-black/20 flex`}>
                 {!dmState.activeConversationId ? (
                     <FriendsView
                         onStartDm={async (buddyId) => {

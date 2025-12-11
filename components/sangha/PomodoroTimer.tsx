@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Play, Pause, RotateCcw, Coffee, Briefcase, Clock, CheckCircle2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import { cn } from '@/lib/utils'
+import { useSound } from '@/hooks/useSound'
 
 interface PomodoroTimerProps {
     roomId: string
@@ -22,6 +23,7 @@ export function PomodoroTimer({ roomId, currentUser }: PomodoroTimerProps) {
     const [type, setType] = useState<TimerType>('work')
     const intervalRef = useRef<NodeJS.Timeout | null>(null)
     const startTimeRef = useRef<number | null>(null)
+    const { play } = useSound()
 
     // Cleanup on unmount
     useEffect(() => {
@@ -54,6 +56,7 @@ export function PomodoroTimer({ roomId, currentUser }: PomodoroTimerProps) {
     const handleComplete = async () => {
         setStatus('stopped')
         if (intervalRef.current) clearInterval(intervalRef.current)
+        play('POMODORO_ALARM') // Play singing bowl sound
 
         // Only log if duration was > 5 minutes to prevent spamming tiny sessions
         if (duration < 300) {
@@ -80,9 +83,10 @@ export function PomodoroTimer({ roomId, currentUser }: PomodoroTimerProps) {
                         duration: 5000,
                         icon: '🎉'
                     })
-                    // Trigger confetti or sound here in future
+                    play('XP_GAIN') // Play level up sound
                 } else {
                     toast.success(`Session logged! +${result.xp_gained} XP`, { icon: '🔥' })
+                    play('XP_GAIN') // Play XP gain sound
                 }
             } else {
                 toast.success('Session recorded successfully!')
@@ -98,6 +102,7 @@ export function PomodoroTimer({ roomId, currentUser }: PomodoroTimerProps) {
     }
 
     const handleStart = () => {
+        play('CLICK_SOFT') // Play soft click when starting
         setStatus('running')
     }
 

@@ -15,6 +15,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Skeleton } from '@/components/ui/skeleton'
 
 type Tab = 'online' | 'all' | 'pending' | 'blocked' | 'add_friend'
 
@@ -28,25 +29,44 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
     const [unfriendingBuddy, setUnfriendingBuddy] = useState<{ id: string, username: string } | null>(null)
     const { startDm } = useDm()
 
+    // Pagination State
+    const [page, setPage] = useState(0)
+    const [hasMore, setHasMore] = useState(true)
+    const PAGE_SIZE = 20
+
     useEffect(() => {
-        fetchData()
+        fetchInitialData()
     }, [])
 
-    const fetchData = async () => {
+    const fetchInitialData = async () => {
+        setLoading(true)
+        await Promise.all([
+            fetchBuddies(0, true),
+            fetchRequests()
+        ])
+        setLoading(false)
+    }
+
+    const fetchBuddies = async (pageIndex: number, replace: boolean = false) => {
         try {
             const { data: { user } } = await supabase.auth.getUser()
             if (!user) return
 
-            // 1. Fetch Buddies
+            const from = pageIndex * PAGE_SIZE
+            const to = from + PAGE_SIZE - 1
+
             const { data: connections, error } = await supabase
                 .from('study_connections')
                 .select(`
-          id,
-          requester:profiles!requester_id(id, username, full_name, avatar_url, is_online),
-          receiver:profiles!receiver_id(id, username, full_name, avatar_url, is_online)
-        `)
+                  id,
+                  created_at,
+                  requester:profiles!requester_id(id, username, full_name, avatar_url, is_online),
+                  receiver:profiles!receiver_id(id, username, full_name, avatar_url, is_online)
+                `)
                 .or(`requester_id.eq.${user.id},receiver_id.eq.${user.id}`)
                 .eq('status', 'accepted')
+                .order('created_at', { ascending: false })
+                .range(from, to)
 
             if (error) throw error
 
@@ -54,27 +74,51 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
                 const isRequester = conn.requester.id === user.id
                 return {
                     ...(isRequester ? conn.receiver : conn.requester),
-                    connectionId: conn.id // Store connection ID for deletion
+                    connectionId: conn.id
                 }
             })
 
-            // Deduplicate buddies to prevent "duplicate key" errors
-            const uniqueBuddies = Object.values(
-                formattedBuddies.reduce((acc: any, buddy: any) => {
-                    acc[buddy.id] = buddy
-                    return acc
-                }, {})
-            )
+            if (formattedBuddies.length < PAGE_SIZE) {
+                setHasMore(false)
+            } else {
+                setHasMore(true)
+            }
 
-            setBuddies(uniqueBuddies)
+            if (replace) {
+                setBuddies(formattedBuddies)
+            } else {
+                // ✅ Strict deduplication: Use a Map to ensure unique IDs
+                setBuddies(prev => {
+                    const combined = [...prev, ...formattedBuddies]
+                    const uniqueMap = new Map()
+                    combined.forEach(buddy => {
+                        if (!uniqueMap.has(buddy.id)) {
+                            uniqueMap.set(buddy.id, buddy)
+                        }
+                    })
+                    return Array.from(uniqueMap.values())
+                })
+            }
 
-            // 2. Fetch Requests
+            setPage(pageIndex)
+
+        } catch (error) {
+            console.error('Error fetching friends:', error)
+            toast.error('Failed to load friends')
+        }
+    }
+
+    const fetchRequests = async () => {
+        try {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (!user) return
+
             const { data: pending, error: pendingError } = await supabase
                 .from('study_connections')
                 .select(`
-          id,
-          requester:profiles!requester_id(id, username, full_name, avatar_url, is_online)
-        `)
+                  id,
+                  requester:profiles!requester_id(id, username, full_name, avatar_url, is_online)
+                `)
                 .eq('receiver_id', user.id)
                 .eq('status', 'pending')
 
@@ -84,11 +128,14 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
                 id: p.id,
                 requester: p.requester
             })))
-
         } catch (error) {
-            console.error('Error fetching friends:', error)
-        } finally {
-            setLoading(false)
+            console.error('Error fetching requests:', error)
+        }
+    }
+
+    const loadMore = () => {
+        if (!loading && hasMore) {
+            fetchBuddies(page + 1)
         }
     }
 
@@ -101,7 +148,7 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
 
             if (error) throw error
             toast.success(status === 'accepted' ? 'Request accepted' : 'Request rejected')
-            fetchData()
+            fetchInitialData()
         } catch (error) {
             toast.error('Failed to update request')
         }
@@ -118,7 +165,7 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
             if (error) throw error
             toast.success('Friend removed')
             setUnfriendingBuddy(null)
-            fetchData()
+            fetchInitialData()
         } catch (error) {
             toast.error('Failed to remove friend')
         }
@@ -126,6 +173,7 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
 
     const handleMessage = async (buddyId: string) => {
         // Pass buddyId to parent, which will handle startDm
+        // The parent (SanghaHome) handles the navigation/view switch
         await onStartDm(buddyId)
     }
 
@@ -311,9 +359,25 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
                     ) : (
                         <div>
                             <h2 className="text-stone-400 font-bold text-xs mb-4 uppercase tracking-wider">
-                                {activeTab === 'online' ? 'Online' : 'All Friends'} — {filteredBuddies.length}
+                                {activeTab === 'online' ? 'Online' : 'All Friends'} — {loading ? '...' : filteredBuddies.length}
                             </h2>
                             <div className="space-y-2">
+                                {loading && filteredBuddies.length === 0 && (
+                                    <>
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                            <div key={i} className="flex items-center justify-between p-3 rounded-xl border border-white/5">
+                                                <div className="flex items-center gap-3">
+                                                    <Skeleton className="w-10 h-10 rounded-full" />
+                                                    <div className="space-y-2">
+                                                        <Skeleton className="h-4 w-32" />
+                                                        <Skeleton className="h-3 w-16" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </>
+                                )}
+
                                 {filteredBuddies.map(buddy => (
                                     <div key={buddy.id} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl group border border-white/5 cursor-pointer transition-all" onClick={() => handleMessage(buddy.id)}>
                                         <div className="flex items-center gap-3">
@@ -369,9 +433,21 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
                                         </div>
                                     </div>
                                 ))}
-                                {filteredBuddies.length === 0 && (
+                                {filteredBuddies.length === 0 && !loading && (
                                     <div className="text-center py-10 text-stone-500">
                                         No friends found.
+                                    </div>
+                                )}
+                                {hasMore && (activeTab === 'online' || activeTab === 'all' || activeTab === 'blocked') && (
+                                    <div className="pt-4 flex justify-center">
+                                        <Button
+                                            variant="ghost"
+                                            onClick={loadMore}
+                                            disabled={loading}
+                                            className="text-stone-400 hover:text-white"
+                                        >
+                                            {loading ? 'Loading...' : 'Load More'}
+                                        </Button>
                                     </div>
                                 )}
                             </div>
@@ -413,7 +489,7 @@ export function FriendsView({ onStartDm, onBack }: { onStartDm: (id: string) => 
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     )
 }
 

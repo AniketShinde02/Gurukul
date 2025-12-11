@@ -1,48 +1,128 @@
-# Testing Guide: New Features
+# ✅ DEPLOYMENT COMPLETE - TESTING GUIDE
 
-Now that the database schemas are applied, follow these steps to verify the new functionality in the app.
+## What Just Happened
 
-## 1. Pomodoro Timer
-**Goal:** Verify the timer works and syncs between users.
-1.  **Navigate to a Room:** Go to any study room (e.g., `/sangha/rooms/[id]`).
-2.  **Locate Timer:** Look for the "Pomodoro Timer" in the **Left Sidebar** (under "Productivity Tools").
-3.  **Test Controls (Admin/Host):**
-    *   Click **Start**. The timer should begin counting down.
-    *   Click **Stop**. The timer should pause/stop.
-    *   Click **Reset**. The timer should return to 25:00.
-    *   Change Mode: Click the icons for "Short Break" (Coffee) or "Long Break". The duration should change.
-4.  **Verify Sync:** Open the same room in a **Incognito Window** (or another browser). You should see the timer running in sync with the main window.
+1. ✅ **Database Updated** - Production matchmaking functions deployed
+2. ✅ **Frontend Replaced** - New production-grade chat page active
+3. ✅ **Old Code Backed Up** - `page.tsx.backup` saved
 
-## 2. Whiteboard Persistence
-**Goal:** Ensure drawings are saved and loaded correctly.
-1.  **Select Channel:** Click on the **"Canvas"** channel in the sidebar.
-2.  **Draw:** Use the tools to draw a shape or write text.
-3.  **Refresh:** Refresh the page (`F5`).
-4.  **Verify:** Navigate back to the "Canvas" channel. **Your drawing should still be there.**
-5.  **Real-time:** If you have the Incognito window open, check if the drawing appears there automatically.
+---
 
-## 3. XP & Leveling System
-**Goal:** Verify XP is awarded for activity.
-1.  **Check Initial XP:** Click your **Avatar** (bottom left) to open the Profile Popup. Note your current XP and Level.
-2.  **Earn XP (Chat):**
-    *   Go to the **"General"** (Text) channel.
-    *   Send a message (e.g., "Testing XP").
-    *   **Check Profile:** Open the popup again. Your XP should have increased by **5 points**.
-3.  **Earn XP (Voice):**
-    *   Join a **Voice Channel**.
-    *   Wait for 1 minute.
-    *   **Check Profile:** Your XP should increase by **10 points**.
-4.  **Leaderboard:**
-    *   Look at the **Right Sidebar** (Room Info).
-    *   Check the **"Top Students"** section. You should see yourself listed with your current Level and XP.
+## 🧪 Test Now (Your Dev Server is Running)
 
-## 4. Lo-Fi Music Player
-**Goal:** Verify music playback.
-1.  **Locate Player:** Look for the Music Player in the **Left Sidebar** (below the Timer).
-2.  **Play:** Click the **Play** button. Music should start.
-3.  **Change Station:** Click the "Next" button to switch stations (e.g., Lofi Girl -> Synthwave).
-4.  **Volume:** Adjust the volume slider.
+### Test 1: Basic Matchmaking
+1. Open **http://localhost:3000/chat** (or your dev URL)
+2. Click **"Find Partner"**
+3. **Expected:** Smooth spinning loader (not stuck!)
+4. Open **incognito window** → same URL → click "Find Partner"
+5. **Expected:** Both users connect within 5 seconds
 
-## Troubleshooting
-- **"Relation does not exist"**: If you see this error in the console, it means a database table is missing. Run the migration scripts again.
-- **Timer not syncing**: Ensure you are connected to the internet and Supabase Realtime is active (green "Connected" status in network tab usually).
+### Test 2: Skip Functionality
+1. After match connects, look for **"Skip"** button in header
+2. Click **Skip**
+3. **Expected:** 
+   - Current session ends
+   - Auto-searches for new partner
+   - Smooth transition
+
+### Test 3: Console Check
+1. Open **DevTools** (F12) → **Console** tab
+2. **Expected:** Zero console.log messages (clean!)
+3. Only errors (if any) should show
+
+### Test 4: Memory Leak Check
+1. Match and skip 5 times in a row
+2. Open **DevTools** → **Performance** → **Memory**
+3. **Expected:** Memory stays stable (no continuous growth)
+
+---
+
+## 🐛 If You See Issues
+
+### Issue: "useMatchmaking is not defined"
+**Fix:** The hook file exists at `hooks/useMatchmaking.ts` - TypeScript should auto-import it.
+
+If not, add this import to `page.tsx`:
+```typescript
+import { useMatchmaking } from '@/hooks/useMatchmaking';
+```
+
+### Issue: Build errors
+**Run:**
+```bash
+npm run build
+```
+
+If errors appear, share them and I'll fix immediately.
+
+### Issue: Loader still stuck
+**Check:**
+1. Did SQL run successfully? (You said yes ✅)
+2. Is dev server restarted? (Try Ctrl+C and `npm run dev` again)
+3. Any console errors?
+
+---
+
+## 📊 What to Look For (Success Metrics)
+
+✅ **Loader spins smoothly** (not frozen)
+✅ **Both users connect simultaneously** (no asymmetric matching)
+✅ **Skip button appears** in header after match
+✅ **Zero console logs** in production
+✅ **Match time < 5 seconds**
+✅ **No memory leaks** after multiple matches
+
+---
+
+## 🚀 Next Steps After Testing
+
+### If Tests Pass:
+```bash
+# Build for production
+npm run build
+
+# Deploy to Vercel (or your platform)
+vercel --prod
+```
+
+### If Tests Fail:
+- Share the error/issue
+- I'll debug and fix immediately
+- We have backup: `page.tsx.backup`
+
+---
+
+## 🎯 Quick Rollback (If Needed)
+
+```bash
+# Restore old version
+Move-Item "app/(authenticated)/chat/page.tsx.backup" "app/(authenticated)/chat/page.tsx" -Force
+
+# Restart dev server
+# Ctrl+C then npm run dev
+```
+
+---
+
+## 📝 What Changed (Summary)
+
+### Backend (Database):
+- ✅ Advisory locks prevent race conditions
+- ✅ Atomic queue removal (both users deleted together)
+- ✅ Skip partner function added
+- ✅ Auto-cleanup of stale entries
+- ✅ Performance indexes created
+
+### Frontend (React):
+- ✅ New `useMatchmaking` hook (proper state management)
+- ✅ Exponential backoff retry logic
+- ✅ Skip button in UI
+- ✅ All console.logs removed
+- ✅ Memory leak prevention
+- ✅ Proper cleanup functions
+
+---
+
+**Go test it now!** Open http://localhost:3000/chat and try matching! 🎉
+
+Let me know what happens!

@@ -47,9 +47,16 @@
   - *Update*: Implemented custom, native-like context menus for servers and channels, replacing browser defaults.
 - [x] **Roles & Permissions**: Full Role-Based Access Control (RBAC) with custom roles, RLS policies, and Admin tools (e.g., Delete Channel).
 - [x] **XP System**: Earn points for study time (Mock UI exists).
+- [ ] **XP Backend**: Real logic to award points based on session duration.
 - [ ] **Leaderboards**: Weekly/Monthly top students.
 
-## Phase 6: Mobile & Performance (Planned)
-- [ ] **Mobile Responsiveness**: Optimize all views for mobile.
-- [ ] **PWA Support**: Installable web app.
+## Phase 6: Mobile & Performance (Next Steps)
+- [ ] **Mobile Responsiveness**: Optimize complex modals (Server Settings) and Event Cards for small screens.
+- [ ] **PWA Support**: Installable web app manifest and service workers.
 - [ ] **Virtualization**: Optimize chat list for large history.
+
+## Phase 7: Final Polish & Assets (Pending)
+- [ ] **Sound Effects**: Add real `.mp3` files for notifications and wiring them up.
+- [ ] **Advanced Notifications**: Ringtones for incoming calls and persistent DM alerts.
+- [ ] **Channel Image Upload**: Implement file upload logic for Image Channels (currently UI only).
+

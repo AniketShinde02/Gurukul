@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useDm } from '@/hooks/useDm'
+import { useSound } from '@/hooks/useSound'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,17 +30,27 @@ export function DmInterface() {
         currentUserId
     } = useDm()
 
+    const { play } = useSound()
     const [newMessage, setNewMessage] = useState('')
     const [showEmojiPicker, setShowEmojiPicker] = useState(false)
     const scrollRef = useRef<HTMLDivElement>(null)
     const emojiPickerRef = useRef<HTMLDivElement>(null)
+    const prevMessagesLengthRef = useRef(0)
 
-    // Auto-scroll to bottom
+    // Auto-scroll to bottom & play receive sound
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight
         }
-    }, [messages])
+        // Play receive sound only when new message arrives from other user
+        if (messages.length > prevMessagesLengthRef.current) {
+            const latestMessage = messages[messages.length - 1]
+            if (latestMessage && latestMessage.sender_id !== currentUserId) {
+                play('MESSAGE_RECEIV')
+            }
+        }
+        prevMessagesLengthRef.current = messages.length
+    }, [messages, currentUserId, play])
 
     // Close emoji picker when clicking outside
     useEffect(() => {
@@ -60,6 +71,7 @@ export function DmInterface() {
         e.preventDefault()
         if (!newMessage.trim()) return
         sendMessage(newMessage)
+        play('MESSAGE_SEND')
         setNewMessage('')
         setShowEmojiPicker(false)
     }

@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParticipants, useLocalParticipant, useTracks } from '@livekit/components-react'
 import { Track } from 'livekit-client'
 import { Mic, MicOff, Video as VideoIcon, VideoOff, User } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { useSound } from '@/hooks/useSound'
 
 interface ParticipantGridProps {
     roomName: string
@@ -20,6 +21,8 @@ export function ParticipantGrid({ roomName }: ParticipantGridProps) {
         { onlySubscribed: false }
     )
     const [gridLayout, setGridLayout] = useState<string>('')
+    const { play } = useSound()
+    const prevParticipantCountRef = useRef(0)
 
     // Calculate grid layout based on participant count
     useEffect(() => {
@@ -41,6 +44,25 @@ export function ParticipantGrid({ roomName }: ParticipantGridProps) {
             setGridLayout('grid-cols-4 grid-rows-4')
         }
     }, [participants.length])
+
+    // Play join/leave sounds when participant count changes
+    useEffect(() => {
+        const currentCount = participants.length
+        const prevCount = prevParticipantCountRef.current
+
+        // Skip on initial mount (when prevCount is 0)
+        if (prevCount > 0) {
+            if (currentCount > prevCount) {
+                // Someone joined
+                play('USER_JOIN')
+            } else if (currentCount < prevCount) {
+                // Someone left
+                play('USER_LEAVE')
+            }
+        }
+
+        prevParticipantCountRef.current = currentCount
+    }, [participants.length, play])
 
     if (participants.length === 0) {
         return (

@@ -88,13 +88,17 @@ export default function HomePage() {
 
                     {/* Links - Hidden on mobile, visible on lg */}
                     <div className="hidden md:flex items-center space-x-6">
-                        {['Study Halls', 'Find a Guru', 'Sangha'].map((item) => (
+                        {[
+                            { name: 'Study Halls', href: '/rooms' },
+                            { name: 'Find a Guru', href: '#find-a-guru' },
+                            { name: 'Sangha', href: '/sangha' }
+                        ].map((item) => (
                             <Link
-                                key={item}
-                                href={`#${item.toLowerCase().replace(' ', '-')}`}
+                                key={item.name}
+                                href={item.href}
                                 className="text-stone-400 hover:text-orange-500 transition-colors font-medium text-xs tracking-wide"
                             >
-                                {item}
+                                {item.name}
                             </Link>
                         ))}
                     </div>
