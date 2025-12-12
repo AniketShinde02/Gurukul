@@ -384,7 +384,7 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
         // 2. Subscribe to WebSocket Updates (instead of polling)
         // We use the same WS server as matchmaking: ws://localhost:8080 (or production URL)
         // Note: For now assuming localhost for dev
-        const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080'
+        const WS_URL = process.env.NEXT_PUBLIC_MATCHMAKING_WS_URL || 'ws://localhost:8080'
 
         let ws: WebSocket | null = null;
         let reconnectTimeout: NodeJS.Timeout;
