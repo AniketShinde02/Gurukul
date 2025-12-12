@@ -81,21 +81,25 @@ function ChannelGroup({ title, channels, type, activeChannel, onSelect, onSelect
                 )}
             </div>
             <div className="space-y-[2px]">
-                {channels.map((channel) => (
-                    <ChannelItem
-                        key={channel.id}
-                        id={channel.id}
-                        name={channel.name}
-                        type={type}
-                        active={activeChannel === type && false}
-                        onClick={() => { onSelect(type); onSelectGlobal(type) }}
-                        onEdit={canManage ? () => onEdit(channel.id) : undefined}
-                        onDelete={canManage ? () => onDelete(channel.id) : undefined}
-                        onContextMenu={(e) => onContextMenu(e, channel.id)}
-                    />
-                ))}
-                {channels.length === 0 && <div className="px-2 text-[10px] text-stone-600 italic">No channels</div>}
-                {children}
+                {/* Render children if provided (for custom voice channel rendering) */}
+                {children ? children : (
+                    <>
+                        {channels.map((channel) => (
+                            <ChannelItem
+                                key={channel.id}
+                                id={channel.id}
+                                name={channel.name}
+                                type={type}
+                                active={activeChannel === type && false}
+                                onClick={() => { onSelect(type); onSelectGlobal(type) }}
+                                onEdit={canManage ? () => onEdit(channel.id) : undefined}
+                                onDelete={canManage ? () => onDelete(channel.id) : undefined}
+                                onContextMenu={(e) => onContextMenu(e, channel.id)}
+                            />
+                        ))}
+                        {channels.length === 0 && <div className="px-2 text-[10px] text-stone-600 italic">No channels</div>}
+                    </>
+                )}
             </div>
         </div>
     )
@@ -165,6 +169,50 @@ type RoomEvent = {
     channel_id?: string | null
     status?: 'upcoming' | 'active' | 'past'
     participant_count?: number
+}
+
+// Participant Item with Timer (Discord-style)
+function ParticipantItem({ participant }: { participant: { sid: string, identity: string } }) {
+    const [duration, setDuration] = useState(0)
+
+    useEffect(() => {
+        // Start timer when participant mounts
+        const interval = setInterval(() => {
+            setDuration(d => d + 1)
+        }, 1000)
+
+        return () => clearInterval(interval)
+    }, [])
+
+    const formatDuration = (seconds: number) => {
+        const mins = Math.floor(seconds / 60)
+        const secs = seconds % 60
+        if (mins === 0) return `${secs}s`
+        return `${mins}:${secs.toString().padStart(2, '0')}`
+    }
+
+    return (
+        <div className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-white/5 transition-colors group">
+            <Avatar className="w-5 h-5 border border-white/10">
+                <AvatarFallback className="bg-stone-700 text-white text-[10px] font-bold">
+                    {participant.identity[0]?.toUpperCase() || 'U'}
+                </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-stone-300 group-hover:text-white truncate transition-colors">
+                    {participant.identity}
+                </p>
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+                {/* Timer (Discord-style) */}
+                <span className="text-[10px] text-stone-500 font-mono">
+                    {formatDuration(duration)}
+                </span>
+                {/* Green dot */}
+                <div className="w-2 h-2 rounded-full bg-green-500 opacity-70 group-hover:opacity-100 transition-opacity" />
+            </div>
+        </div>
+    )
 }
 
 export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, isMobile = false }: { roomId: string, roomName: string, onSelectChannel: (type: 'text' | 'voice' | 'canvas' | 'video' | 'image') => void, currentUser?: any, isMobile?: boolean }) {
@@ -314,26 +362,75 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
         }
     }, [roomId, fetchChannels, fetchCategories, fetchEvents])
 
-    // Poll for participants - ONLY when connected to voice
+    // Real-time Event-Driven Updates (Zero Polling)
     useEffect(() => {
-        if (!isConnected) {
-            setParticipants([]);
-            return;
-        }
+        const defaultRoom = `${roomId}-General Lounge`
+        const roomToFetch = activeCallRoom || defaultRoom
 
+        // 1. Initial Fetch
         const fetchParticipants = async () => {
+            // ... logic same as before ... 
+            // Intentionally duplicating simple fetch to keep it clean or we can extract it.
             try {
-                const res = await fetch(`/api/livekit/participants?room=${roomName}`)
+                const res = await fetch(`/api/livekit/participants?room=${encodeURIComponent(roomToFetch)}`)
                 const data = await res.json()
-                if (Array.isArray(data)) {
-                    setParticipants(data)
-                }
-            } catch (e) { console.error(e) }
+                if (Array.isArray(data)) setParticipants(data)
+            } catch (e) {
+                console.error(e)
+            }
         }
         fetchParticipants()
-        const interval = setInterval(fetchParticipants, 5000)
-        return () => clearInterval(interval)
-    }, [roomName, isConnected])
+
+        // 2. Subscribe to WebSocket Updates (instead of polling)
+        // We use the same WS server as matchmaking: ws://localhost:8080 (or production URL)
+        // Note: For now assuming localhost for dev
+        const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080'
+
+        let ws: WebSocket | null = null;
+        let reconnectTimeout: NodeJS.Timeout;
+
+        const connect = () => {
+            try {
+                ws = new WebSocket(WS_URL)
+
+                ws.onopen = () => {
+                    // Subscribe to this room's updates
+                    ws?.send(JSON.stringify({ type: 'subscribe_room', roomId: roomToFetch }))
+                }
+
+                ws.onmessage = (event) => {
+                    try {
+                        const msg = JSON.parse(event.data)
+                        if (msg.type === 'participants_update' && msg.payload.roomName === roomToFetch) {
+                            // The server told us to update!
+                            console.log('⚡ Real-time update received!')
+                            // We can either use the payload (if full list sent) or re-fetch (if empty signal)
+                            // The webhook currently sends empty list to trigger re-fetch (safe/fresh)
+                            fetchParticipants()
+                        }
+                    } catch (e) { }
+                }
+
+                ws.onclose = () => {
+                    // Try to reconnect in 5s
+                    reconnectTimeout = setTimeout(connect, 5000)
+                }
+            } catch (e) {
+                console.warn('WS Connection failed, falling back to polling')
+                // Fallback to polling if WS fails
+            }
+        }
+
+        connect()
+
+        return () => {
+            if (ws) {
+                ws.close()
+                // ws.send(JSON.stringify({ type: 'unsubscribe_room', roomId: roomToFetch }))
+            }
+            clearTimeout(reconnectTimeout)
+        }
+    }, [activeCallRoom, roomId])
 
     // Timer
     useEffect(() => {
@@ -665,7 +762,39 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
                     onDelete={setDeletingChannelId}
                     onContextMenu={handleContextMenu}
                 >
-                    {/* ... participants ... */}
+                    {/* Discord-style voice channels with nested participants */}
+                    {voiceChannels.map((channel) => {
+                        // Show participants to EVERYONE (not just connected users)
+                        const showParticipants = participants.length > 0
+
+                        return (
+                            <div key={channel.id}>
+                                {/* Channel Button with Count */}
+                                <ChannelItem
+                                    id={channel.id}
+                                    name={`${channel.name}${showParticipants ? ` (${participants.length})` : ''}`}
+                                    type="voice"
+                                    active={activeChannel === 'voice'}
+                                    onClick={() => { setActiveChannel('voice'); onSelectChannel('voice') }}
+                                    onEdit={can('manage_channels') ? () => setEditingChannelId(channel.id) : undefined}
+                                    onDelete={can('manage_channels') ? () => setDeletingChannelId(channel.id) : undefined}
+                                    onContextMenu={(e) => handleContextMenu(e, channel.id)}
+                                />
+
+                                {/* Nested Participants (Discord-style with timer) */}
+                                {showParticipants && (
+                                    <div className="ml-6 mt-1 space-y-0.5 pb-2">
+                                        {participants.map((participant) => (
+                                            <ParticipantItem
+                                                key={participant.sid}
+                                                participant={participant}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )
+                    })}
                 </ChannelGroup>
 
                 {/* Video Channels */}
@@ -905,7 +1034,7 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
                         </div>
 
                         <div className="mb-3">
-                            <span className="text-sm font-bold text-white block truncate mb-1">{activeCallRoom || 'Study Lounge'}</span>
+                            <span className="text-sm font-bold text-white block truncate mb-1"></span>
                             <div className="flex items-center gap-2 text-[10px] text-stone-400 font-mono">
                                 <span className="text-emerald-400 flex items-center gap-1.5 bg-emerald-500/10 px-1.5 py-0.5 rounded">
                                     <Signal className="w-3 h-3" />

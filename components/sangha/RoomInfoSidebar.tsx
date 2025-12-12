@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { toast } from 'react-hot-toast'
 import { useCall } from './GlobalCallManager'
+import { RoleBadge } from './RoleBadge'
 
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -32,6 +33,16 @@ export function RoomInfoSidebar({ roomId }: { roomId: string }) {
 
         const fetchMembers = async () => {
             try {
+                // Fetch room owner
+                const { data: roomData } = await supabase
+                    .from('study_rooms')
+                    .select('owner_id, created_by')
+                    .eq('id', roomId)
+                    .single()
+
+                const ownerId = roomData?.owner_id || roomData?.created_by
+
+                // Fetch all members with their roles
                 const { data, error } = await supabase
                     .from('room_participants')
                     .select(`
@@ -52,16 +63,62 @@ export function RoomInfoSidebar({ roomId }: { roomId: string }) {
                 if (error) throw error
 
                 if (data) {
-                    const formatted = data.map((p: any) => ({
-                        id: p.profiles.id,
-                        name: p.profiles.full_name || p.profiles.username,
-                        username: p.profiles.username,
-                        avatar_url: p.profiles.avatar_url,
-                        is_online: p.profiles.is_online,
-                        role: p.role ? p.role.charAt(0).toUpperCase() + p.role.slice(1) : 'Member',
-                        xp: p.profiles.xp || 0,
-                        level: p.profiles.level || 1
-                    }))
+                    // Fetch all user roles from junction table
+                    const userIds = data.map(p => p.user_id)
+                    const { data: userRolesData } = await supabase
+                        .from('room_user_roles')
+                        .select(`
+                            user_id,
+                            room_roles (
+                                id,
+                                name,
+                                color,
+                                icon,
+                                position
+                            )
+                        `)
+                        .eq('room_id', roomId)
+                        .in('user_id', userIds)
+
+                    // Group roles by user
+                    const rolesByUser: Record<string, any[]> = {}
+                    userRolesData?.forEach((ur: any) => {
+                        if (!rolesByUser[ur.user_id]) {
+                            rolesByUser[ur.user_id] = []
+                        }
+                        if (ur.room_roles) {
+                            rolesByUser[ur.user_id].push(ur.room_roles)
+                        }
+                    })
+
+                    const formatted = data.map((p: any) => {
+                        const userRoles = rolesByUser[p.user_id] || []
+                        // Sort roles by position (0 = highest priority)
+                        userRoles.sort((a, b) => a.position - b.position)
+
+                        const highestRole = userRoles[0]
+                        const isOwner = p.user_id === ownerId
+
+                        return {
+                            id: p.profiles.id,
+                            name: p.profiles.full_name || p.profiles.username,
+                            username: p.profiles.username,
+                            avatar_url: p.profiles.avatar_url,
+                            is_online: p.profiles.is_online,
+                            xp: p.profiles.xp || 0,
+                            level: p.profiles.level || 1,
+                            roles: userRoles,
+                            highestRole: highestRole,
+                            roleColor: highestRole?.color || '#99AAB5',
+                            isOwner: isOwner,
+                            // For sorting: Owner > Admin > Mod > Member
+                            sortPriority: isOwner ? -1 : (highestRole?.position ?? 999)
+                        }
+                    })
+
+                    // Sort members: Owner first, then by role position
+                    formatted.sort((a, b) => a.sortPriority - b.sortPriority)
+
                     setMembers(formatted)
                 }
             } catch (error) {
@@ -206,21 +263,61 @@ export function RoomInfoSidebar({ roomId }: { roomId: string }) {
                             members.map((member) => (
                                 <div key={member.id} className="flex items-center gap-3 group cursor-pointer hover:bg-white/5 p-2 rounded-xl transition-colors">
                                     <div className="relative">
-                                        <Avatar className="w-10 h-10 border border-white/10">
+                                        <Avatar className="w-10 h-10 border-2 transition-colors" style={{ borderColor: member.roleColor || 'rgba(255,255,255,0.1)' }}>
                                             <AvatarImage src={member.avatar_url || undefined} />
                                             <AvatarFallback className="bg-stone-800 text-stone-300">
                                                 {member.username[0].toUpperCase()}
                                             </AvatarFallback>
                                         </Avatar>
+                                        {/* Owner Crown Badge on Avatar */}
+                                        {member.isOwner && (
+                                            <div className="absolute -top-1 -right-1 bg-stone-900 rounded-full p-0.5 border border-stone-800">
+                                                <RoleBadge
+                                                    role={{ name: 'Owner', color: '#FFD700', icon: 'crown' }}
+                                                    isOwner
+                                                    size="sm"
+                                                />
+                                            </div>
+                                        )}
+                                        {/* Online Status */}
                                         <div className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-stone-900 rounded-full ${member.is_online ? 'bg-green-500' : 'bg-stone-600'}`} />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between">
-                                            <span className="font-bold text-stone-200 text-sm truncate">
-                                                {member.name}
-                                                {currentUser && member.id === currentUser.id && <span className="text-stone-500 ml-1">(You)</span>}
-                                            </span>
-                                            {member.role && <span className="text-[10px] text-stone-500 font-medium">{member.role}</span>}
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                                <span
+                                                    className="font-bold text-sm truncate transition-colors"
+                                                    style={{ color: member.roleColor }}
+                                                >
+                                                    {member.name}
+                                                    {currentUser && member.id === currentUser.id && <span className="text-stone-500 ml-1">(You)</span>}
+                                                </span>
+                                                {/* Highest Role Badge */}
+                                                {member.highestRole && !member.isOwner && (
+                                                    <RoleBadge role={member.highestRole} size="sm" />
+                                                )}
+                                            </div>
+
+                                            {/* All Role Tags (shown on hover) */}
+                                            {member.roles && member.roles.length > 0 && (
+                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    {member.roles.slice(0, 2).map((role: any) => (
+                                                        <span
+                                                            key={role.id}
+                                                            className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                                                            style={{
+                                                                backgroundColor: `${role.color}20`,
+                                                                color: role.color
+                                                            }}
+                                                        >
+                                                            {role.name}
+                                                        </span>
+                                                    ))}
+                                                    {member.roles.length > 2 && (
+                                                        <span className="text-[10px] text-stone-500 font-medium">+{member.roles.length - 2}</span>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="text-xs text-stone-500 truncate">@{member.username}</div>
                                     </div>

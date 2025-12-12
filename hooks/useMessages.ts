@@ -36,11 +36,8 @@ export function useMessages(roomId: string) {
         isLoading,
     } = useInfiniteQuery({
         queryKey: ['messages', roomId],
-        queryFn: async ({ pageParam = 0 }) => {
-            const from = pageParam * ROWS_PER_PAGE
-            const to = from + ROWS_PER_PAGE - 1
-
-            const { data, error } = await supabase
+        queryFn: async ({ pageParam = null }) => {
+            let query = supabase
                 .from('room_messages')
                 .select(`
           *,
@@ -49,23 +46,23 @@ export function useMessages(roomId: string) {
         `)
                 .eq('room_id', roomId)
                 .order('created_at', { ascending: false }) // Fetch latest first for chat
-                .range(from, to)
+                .limit(ROWS_PER_PAGE)
+
+            if (pageParam) {
+                query = query.lt('created_at', pageParam as string)
+            }
+
+            const { data, error } = await query
 
             if (error) throw error
-
-            // We reverse the page data so it renders correctly (oldest to newest) within the chunk
-            // But typically for infinite scroll (inverse), we keep them as is and handle in UI
-            // React-window usually wants list items. 
-            // Important: We fetched DESCENDING (newest first) to get the latest messages.
-            // So page 0 has [Newest ... Older].
             return data as RoomMessage[]
         },
-        initialPageParam: 0,
-        getNextPageParam: (lastPage, allPages) => {
-            if (lastPage.length < ROWS_PER_PAGE) return undefined
-            return allPages.length
+        initialPageParam: null as string | null,
+        getNextPageParam: (lastPage: RoomMessage[]) => {
+            if (!lastPage || lastPage.length < ROWS_PER_PAGE) return undefined
+            return lastPage[lastPage.length - 1].created_at
         },
-        staleTime: 5 * 60 * 1000, // 5 minutes
+        staleTime: 5 * 60 * 1000,
         gcTime: 30 * 60 * 1000,
     })
 

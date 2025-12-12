@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Switch } from '@/components/ui/switch'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'react-hot-toast'
-import { Loader2, Upload, Plus, Shield, Users, Ban, Settings, LogOut, ChevronDown, Trash2 } from 'lucide-react'
+import { Loader2, Upload, Plus, Shield, Users, Ban, Settings, LogOut, ChevronDown, Trash2, Crown, Hammer, Bot, Star, Zap, Award } from 'lucide-react'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -22,6 +22,7 @@ type Role = {
     id: string
     name: string
     color: string
+    icon?: string | null
     position: number
     permissions: Record<string, boolean>
 }
@@ -460,6 +461,7 @@ function RolesManager({ roomId, roles, setRoles }: { roomId: string, roles: Role
         const { error } = await supabase.from('room_roles').update({
             name: editedRole.name,
             color: editedRole.color,
+            icon: editedRole.icon,
             permissions: editedRole.permissions
         }).eq('id', editedRole.id)
 
@@ -550,6 +552,60 @@ function RolesManager({ roomId, roles, setRoles }: { roomId: string, roles: Role
                                         className="bg-stone-800 border-white/10 w-32 font-mono uppercase"
                                     />
                                 </div>
+                            </div>
+
+                            {/* Role Icon Picker */}
+                            <div className="space-y-2">
+                                <Label>Role Icon (Discord-style)</Label>
+                                <div className="grid grid-cols-6 gap-2">
+                                    {[
+                                        { icon: 'shield', label: 'Shield', Component: Shield },
+                                        { icon: 'crown', label: 'Crown', Component: Crown },
+                                        { icon: 'hammer', label: 'Hammer', Component: Hammer },
+                                        { icon: 'bot', label: 'Bot', Component: Bot },
+                                        { icon: 'star', label: 'Star', Component: Star },
+                                        { icon: 'zap', label: 'Zap', Component: Zap },
+                                        { icon: 'award', label: 'Award', Component: Award },
+                                        { icon: '🛡️', label: 'Shield Emoji', Component: null },
+                                        { icon: '👑', label: 'Crown Emoji', Component: null },
+                                        { icon: '🔨', label: 'Hammer Emoji', Component: null },
+                                        { icon: '🤖', label: 'Bot Emoji', Component: null },
+                                        { icon: '⭐', label: 'Star Emoji', Component: null },
+                                    ].map((item) => (
+                                        <button
+                                            key={item.icon}
+                                            type="button"
+                                            onClick={() => setEditedRole({ ...editedRole, icon: item.icon })}
+                                            className={`p-2 rounded-lg border transition-all hover:scale-110 ${editedRole?.icon === item.icon
+                                                    ? 'border-orange-500 bg-orange-500/10 ring-2 ring-orange-500/50'
+                                                    : 'border-stone-700 hover:border-stone-600 hover:bg-stone-800'
+                                                }`}
+                                            title={item.label}
+                                        >
+                                            {item.Component ? (
+                                                <item.Component className="w-5 h-5 text-stone-300 mx-auto" />
+                                            ) : (
+                                                <span className="text-xl block">{item.icon}</span>
+                                            )}
+                                        </button>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditedRole({ ...editedRole, icon: null })}
+                                        className={`p-2 rounded-lg border transition-all hover:scale-110 flex items-center justify-center ${!editedRole?.icon
+                                                ? 'border-orange-500 bg-orange-500/10 ring-2 ring-orange-500/50'
+                                                : 'border-stone-700 hover:border-stone-600 hover:bg-stone-800'
+                                            }`}
+                                        title="No Icon"
+                                    >
+                                        <span className="text-stone-500 text-xs font-medium">None</span>
+                                    </button>
+                                </div>
+                                {editedRole?.icon && (
+                                    <p className="text-xs text-stone-500 mt-1">
+                                        Selected: <span className="font-medium text-orange-500">{editedRole.icon}</span>
+                                    </p>
+                                )}
                             </div>
                         </div>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react'
 import { useDm } from '@/hooks/useDm'
 import { useSound } from '@/hooks/useSound'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -23,6 +23,9 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
         conversations,
         messages,
         isLoading,
+        isMoreLoading,
+        hasMore,
+        loadMoreMessages,
         sendMessage,
         uploadFile,
         deleteMessage,
@@ -42,7 +45,8 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
     const emojiPickerRef = useRef<HTMLDivElement>(null)
     const gifPickerRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
-    const prevMessagesLengthRef = useRef(0)
+    const prevScrollHeightRef = useRef(0)
+    const prevMessageCountRef = useRef(0)
 
     // Drag & Drop Handlers
     const onDragOver = useCallback((e: React.DragEvent) => {
@@ -86,20 +90,56 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
         setActiveConversationId(conversationId)
     }, [conversationId, setActiveConversationId])
 
-    // Auto-scroll only on new messages (length change), not on updates (deletes)
-    useEffect(() => {
-        if (scrollRef.current) {
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    const handleScroll = useCallback(() => {
+        const div = scrollRef.current
+        if (!div) return
+
+        if (div.scrollTop === 0 && hasMore && !isMoreLoading && !isLoading) {
+            prevScrollHeightRef.current = div.scrollHeight
+            loadMoreMessages()
         }
-        // Play receive sound for new messages from others
-        if (messages.length > prevMessagesLengthRef.current) {
+    }, [hasMore, isMoreLoading, isLoading, loadMoreMessages])
+
+    // Restore scroll position after loading older messages
+    useLayoutEffect(() => {
+        const div = scrollRef.current
+        if (!div || prevScrollHeightRef.current === 0) return
+
+        if (div.scrollHeight > prevScrollHeightRef.current) {
+            const diff = div.scrollHeight - prevScrollHeightRef.current
+            div.scrollTop = diff
+            prevScrollHeightRef.current = 0
+        }
+    }, [messages])
+
+    // Auto-scroll logic for NEW messages
+    useEffect(() => {
+        const div = scrollRef.current
+        if (!div) return
+
+        // If not loading history...
+        if (!isMoreLoading && prevScrollHeightRef.current === 0) {
+            const isAtBottom = div.scrollHeight - div.scrollTop - div.clientHeight < 150
+            const lastMsg = messages[messages.length - 1]
+            // Scroll if at bottom OR I sent the message
+            if (isAtBottom || (lastMsg && lastMsg.sender_id === currentUserId)) {
+                div.scrollTop = div.scrollHeight
+            }
+        }
+    }, [messages, isMoreLoading, currentUserId])
+
+    // Sound effect (Receive)
+    useEffect(() => {
+        if (messages.length > prevMessageCountRef.current) {
             const latestMessage = messages[messages.length - 1]
-            if (latestMessage && latestMessage.sender_id !== currentUserId) {
+            // Only play if it's a NEW message (not history load) and not from me
+            // History loads usually maintain or increase count, but we check isMoreLoading
+            if (latestMessage && latestMessage.sender_id !== currentUserId && !isMoreLoading && !isLoading) {
                 play('MESSAGE_ROOM')
             }
         }
-        prevMessagesLengthRef.current = messages.length
-    }, [messages.length, conversationId, currentUserId, play])
+        prevMessageCountRef.current = messages.length
+    }, [messages, currentUserId, play, isMoreLoading, isLoading])
 
     // Close pickers when clicking outside
     useEffect(() => {
@@ -247,8 +287,22 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
             {/* Messages */}
             <div
                 ref={scrollRef}
+                onScroll={handleScroll}
                 className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col min-h-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']"
             >
+                {/* Loading History Spinner */}
+                {isMoreLoading && (
+                    <div className="flex justify-center py-2">
+                        <div className="animate-spin w-5 h-5 border-2 border-orange-500 border-t-transparent rounded-full" />
+                    </div>
+                )}
+
+                {!hasMore && messages.length > 10 && (
+                    <div className="text-center py-4 text-xs text-stone-600 font-medium uppercase tracking-widest">
+                        Start of History
+                    </div>
+                )}
+
                 <div className="flex-1" /> {/* Spacer */}
 
                 <div className="w-full max-w-4xl mx-auto space-y-2 pb-4">

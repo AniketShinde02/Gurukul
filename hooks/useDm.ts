@@ -36,6 +36,8 @@ export function useDm() {
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
     const [messages, setMessages] = useState<DmMessage[]>([])
     const [isLoading, setIsLoading] = useState(false)
+    const [isMoreLoading, setIsMoreLoading] = useState(false)
+    const [hasMore, setHasMore] = useState(true)
     const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
     // Fetch current user
@@ -89,8 +91,10 @@ export function useDm() {
 
         const fetchMessages = async () => {
             setIsLoading(true)
+            setMessages([]) // Reset on new convo
+            setHasMore(true)
             try {
-                const res = await fetch(`/api/dm/conversations/${activeConversationId}/messages`, {
+                const res = await fetch(`/api/dm/conversations/${activeConversationId}/messages?limit=50`, {
                     credentials: 'include'
                 })
 
@@ -101,6 +105,7 @@ export function useDm() {
                 const data = await res.json()
                 if (data.messages) {
                     setMessages(data.messages)
+                    setHasMore(data.messages.length === 50)
                     // Mark as read
                     await fetch(`/api/dm/conversations/${activeConversationId}/read`, {
                         method: 'POST',
@@ -157,6 +162,37 @@ export function useDm() {
             supabase.removeChannel(channel)
         }
     }, [activeConversationId, currentUserId])
+
+    const loadMoreMessages = async () => {
+        if (!activeConversationId || !hasMore || isMoreLoading || messages.length === 0) return
+
+        setIsMoreLoading(true)
+        const oldestMessage = messages[0] // Since messages are ordered chronologically [oldest, ..., newest] (?)
+        // Wait, backend returns reversed: { messages: messages.reverse() }
+        // So index 0 is the oldest message.
+
+        try {
+            const res = await fetch(`/api/dm/conversations/${activeConversationId}/messages?limit=50&before=${oldestMessage.created_at}`, {
+                credentials: 'include'
+            })
+
+            if (!res.ok) throw new Error('Failed to load more')
+
+            const data = await res.json()
+            if (data.messages && data.messages.length > 0) {
+                // Prepend older messages
+                setMessages(prev => [...data.messages, ...prev])
+                setHasMore(data.messages.length === 50)
+            } else {
+                setHasMore(false)
+            }
+        } catch (error) {
+            console.error('Error loading older messages:', error)
+            toast.error('Could not load history')
+        } finally {
+            setIsMoreLoading(false)
+        }
+    }
 
     // Realtime Subscription for Conversation List (Updates & New Convos)
     useEffect(() => {
@@ -382,6 +418,9 @@ export function useDm() {
         setActiveConversationId,
         messages,
         isLoading,
+        isMoreLoading,
+        hasMore,
+        loadMoreMessages,
         sendMessage,
         uploadFile,
         deleteMessage,

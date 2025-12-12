@@ -69,18 +69,6 @@ export function ServerRail() {
 
         let finalRooms = roomsData || []
 
-        // Add Demo server only on first page (and if not exists)
-        if (pageIndex === 0 && !finalRooms.some(r => r.id === 'demo-server')) {
-            // We can insert demo server manually if it's not in DB
-            // Or assume DB has it. If DB doesn't have it, we manually add it at top
-            finalRooms = [{
-                id: 'demo-server',
-                name: 'Demo Server',
-                is_demo: true,
-                created_by: 'system',
-                icon_url: null
-            }, ...finalRooms]
-        }
 
         if (finalRooms.length < ROOMS_PER_PAGE) {
             setHasMore(false)

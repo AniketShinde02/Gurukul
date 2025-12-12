@@ -128,6 +128,10 @@ export function PomodoroTimer({ roomId, currentUser }: PomodoroTimerProps) {
         if (input) {
             const minutes = parseInt(input)
             if (!isNaN(minutes) && minutes > 0) {
+                if (minutes > 120) {
+                    toast.error('Duration limited to 120 minutes for integrity')
+                    return
+                }
                 setPreset('custom', minutes)
             } else {
                 toast.error('Invalid duration')

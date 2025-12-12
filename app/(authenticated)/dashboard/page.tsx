@@ -47,22 +47,44 @@ export default function DashboardPage() {
                 .select('*', { count: 'exact', head: true })
                 .eq('is_active', true)
 
-            // Connections (Unique people matched with)
-            const { data: sessions } = await supabase
+            // Connections & Chat Time
+            const { data: chatSessions } = await supabase
                 .from('chat_sessions')
                 .select('user1_id, user2_id, ended_at, started_at')
                 .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
 
+            // Pomodoro Time
+            const { data: timerSessions } = await supabase
+                .from('study_sessions')
+                .select('duration_seconds')
+                .eq('user_id', user.id)
+
             const uniquePeers = new Set()
             let totalSeconds = 0
 
-            sessions?.forEach(session => {
+            // Sum Chat Time
+            chatSessions?.forEach(session => {
                 const peer = session.user1_id === user.id ? session.user2_id : session.user1_id
                 if (peer) uniquePeers.add(peer)
 
                 if (session.started_at && session.ended_at) {
-                    const duration = new Date(session.ended_at).getTime() - new Date(session.started_at).getTime()
-                    totalSeconds += duration / 1000
+                    const start = new Date(session.started_at).getTime()
+                    const end = new Date(session.ended_at).getTime()
+                    const durationMs = end - start
+
+                    // Filter: Only count sessions < 12 hours to exclude bugs/outliers
+                    if (durationMs > 0 && durationMs < 12 * 60 * 60 * 1000) {
+                        totalSeconds += durationMs / 1000
+                    }
+                }
+            })
+
+            // Sum Timer Time
+            timerSessions?.forEach(session => {
+                // Filter: Only count sessions < 5 hours
+                const secs = session.duration_seconds
+                if (secs > 0 && secs < 5 * 60 * 60) {
+                    totalSeconds += secs
                 }
             })
 

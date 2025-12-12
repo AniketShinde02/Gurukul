@@ -69,7 +69,7 @@ type RoomBasic = {
     name: string
     icon_url?: string
     banner_url?: string
-    created_by?: string // Added to check if user is creator
+    created_by?: string
 }
 
 export default function RoomPage() {
@@ -89,94 +89,61 @@ export default function RoomPage() {
     const [showJoinScreen, setShowJoinScreen] = useState(false)
     const [memberCount, setMemberCount] = useState(0)
 
-    // Fast initial load - only essential data
+    // Optimized initial load
     useEffect(() => {
-        const loadEssentials = async () => {
+        const loadData = async () => {
             try {
-                // Single parallel fetch for critical data only
-                const [roomResult, userResult] = await Promise.all([
-                    supabase
-                        .from('study_rooms')
-                        .select('id, name, icon_url, banner_url, created_by')
-                        .eq('id', roomId)
-                        .single(),
-                    supabase.auth.getUser()
+                // 1. Fetch Room, User, and Member Count in parallel
+                const [roomResult, userAuth, countResult] = await Promise.all([
+                    supabase.from('study_rooms').select('id, name, icon_url, banner_url, created_by').eq('id', roomId).single(),
+                    supabase.auth.getUser(),
+                    supabase.from('room_participants').select('*', { count: 'exact', head: true }).eq('room_id', roomId)
                 ])
 
                 if (roomResult.data) {
                     setRoom(roomResult.data)
                 }
 
-                if (userResult.data.user) {
-                    const user = userResult.data.user
+                if (countResult.count !== null) {
+                    setMemberCount(countResult.count)
+                }
 
-                    // Get username from email as fallback (fast)
+                // 2. If user exists, fetch their specific data (Profile + Membership)
+                if (userAuth.data.user && roomResult.data) {
+                    const userId = userAuth.data.user.id
+                    const createdBy = roomResult.data.created_by
+
+                    const [profileResult, participantResult] = await Promise.all([
+                        supabase.from('profiles').select('username').eq('id', userId).single(),
+                        supabase.from('room_participants').select('user_id').eq('room_id', roomId).eq('user_id', userId).single()
+                    ])
+
                     setCurrentUser({
-                        id: user.id,
-                        username: user.email?.split('@')[0] || 'User'
+                        id: userId,
+                        username: profileResult.data?.username || userAuth.data.user.email?.split('@')[0] || 'User'
                     })
 
-                    // Defer membership check - don't block render
-                    // Pass room data to check if user is creator
-                    checkMembership(user.id, roomResult.data?.created_by)
+                    // Membership Logic
+                    const isCreator = createdBy === userId
+                    const isMember = !!participantResult.data
+
+                    if (isCreator && !isMember) {
+                        // Auto-join creator if missing
+                        await supabase.from('room_participants').insert({ room_id: roomId, user_id: userId })
+                        setMemberCount(prev => prev + 1)
+                    } else if (!isCreator && !isMember) {
+                        setShowJoinScreen(true)
+                    }
                 }
             } catch (error) {
-                console.error('Error loading room:', error)
+                console.error('Error loading room data:', error)
             } finally {
                 setLoading(false)
             }
         }
 
-        loadEssentials()
+        loadData()
     }, [roomId])
-
-    // Deferred: Check membership and load member count
-    const checkMembership = async (userId: string, createdBy?: string) => {
-        // If user is the creator, they are automatically a member - no join screen needed
-        const isCreator = createdBy === userId
-
-        const [participantResult, countResult, profileResult] = await Promise.all([
-            supabase
-                .from('room_participants')
-                .select('user_id')
-                .eq('room_id', roomId)
-                .eq('user_id', userId)
-                .single(),
-            supabase
-                .from('room_participants')
-                .select('*', { count: 'exact', head: true })
-                .eq('room_id', roomId),
-            supabase
-                .from('profiles')
-                .select('username')
-                .eq('id', userId)
-                .single()
-        ])
-
-        if (countResult.count !== null) {
-            setMemberCount(countResult.count)
-        }
-
-        if (profileResult.data?.username) {
-            setCurrentUser(prev => prev ? { ...prev, username: profileResult.data.username } : null)
-        }
-
-        // If user is creator but not in participants, auto-add them (fix data inconsistency)
-        if (isCreator && !participantResult.data) {
-            await supabase.from('room_participants').insert({
-                room_id: roomId,
-                user_id: userId
-            })
-            setMemberCount(prev => prev + 1)
-            // Creator is now a member, no join screen needed
-            return
-        }
-
-        // Only show join screen if NOT creator AND NOT already a member
-        if (!isCreator && !participantResult.data) {
-            setShowJoinScreen(true)
-        }
-    }
 
     // Memoized callbacks
     const handleChannelSelect = useCallback((channel: 'text' | 'voice' | 'canvas' | 'video' | 'image') => {
@@ -352,7 +319,7 @@ export default function RoomPage() {
                                     <VoiceLounge onJoin={handleJoinVideo} />
                                 ) : (
                                     <VideoRoom
-                                        roomName={roomName}
+                                        roomName={`${roomId}-General Lounge`}
                                         username={currentUser?.username || 'Guest'}
                                         onLeave={handleVideoLeave}
                                         onToggleChat={handleToggleChat}

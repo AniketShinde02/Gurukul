@@ -82,11 +82,20 @@ export async function awardXP(userId: string, amount: number, reason: string) {
         if (updateError) throw updateError
 
     } catch (error: any) {
+        // Better error logging
         console.error('Error awarding XP:', {
-            message: error?.message || 'Unknown error',
+            userId,
+            amount,
+            reason,
+            errorType: typeof error,
+            errorConstructor: error?.constructor?.name,
+            message: error?.message || 'No message',
             details: error?.details || error?.hint || 'No details',
-            code: error?.code,
-            error: error
+            code: error?.code || 'No code',
+            fullError: JSON.stringify(error, null, 2)
         })
+
+        // Don't throw - just log and continue
+        // This prevents XP errors from breaking the app
     }
 }

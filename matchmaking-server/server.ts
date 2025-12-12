@@ -149,8 +149,41 @@ function createSession(user1: User, user2: User): Session {
 }
 
 // ============================================================
-// MESSAGE HANDLERS
+// ROOM SUBSCRIPTIONS
 // ============================================================
+const roomSubscribers: Map<string, Set<WebSocket>> = new Map();
+
+function handleSubscribeRoom(ws: WebSocket, data: any): void {
+    const { roomId } = data;
+    if (!roomId) return;
+
+    if (!roomSubscribers.has(roomId)) {
+        roomSubscribers.set(roomId, new Set());
+    }
+    roomSubscribers.get(roomId)?.add(ws);
+    // console.log(`📢 Subscribed to room: ${roomId}`);
+}
+
+function handleUnsubscribeRoom(ws: WebSocket, data: any): void {
+    const { roomId } = data;
+    if (roomId && roomSubscribers.has(roomId)) {
+        roomSubscribers.get(roomId)?.delete(ws);
+    }
+}
+
+function handleBroadcastParticipants(data: any): void {
+    const { roomName, participants } = data;
+    const subscribers = roomSubscribers.get(roomName);
+
+    if (subscribers && subscribers.size > 0) {
+        subscribers.forEach(ws => {
+            if (ws.readyState === WebSocket.OPEN) {
+                send(ws, 'participants_update', { roomName, participants });
+            }
+        });
+        console.log(`📡 Broadcasted to ${subscribers.size} clients in ${roomName}`);
+    }
+}
 
 function handleJoinQueue(ws: WebSocket, data: any): void {
     const { userId, matchMode = 'global', buddyIds = [] } = data;
@@ -238,7 +271,50 @@ function handleSkip(ws: WebSocket, data: any): void {
 // WEBSOCKET SERVER
 // ============================================================
 
+// Original server removed to avoid redeclaration.
+// We are using 'appServer' instead.
+
+// We need to define wss but it needs a server.
+// Since 'appServer' is defined later, we should move the server creation UP or define wss later.
+// However, to minimize line changes, let's just create a temporary holder or fix the order.
+
+// FIX: Move wss definition to AFTER appServer creation in the actual file structure logic.
+// But since I can't move huge blocks easily, I will just disable the strict check or re-order in my head? No.
+// I will insert:
+// const wss = new WebSocketServer({ noServer: true }); 
+// And handle upgrade manually? Or just make sure 'server' is not redeclared.
+//
+// BETTER FIX: Let's just create 'server' (appServer) HERE and use it.
+
 const server = createServer((req, res) => {
+    // Enable CORS
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+    }
+
+    if (req.url === '/broadcast' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                handleBroadcastParticipants(data);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true }));
+            } catch (e) {
+                res.writeHead(400);
+                res.end('Invalid JSON');
+            }
+        });
+        return;
+    }
+
     // Health check endpoint
     if (req.url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -247,6 +323,7 @@ const server = createServer((req, res) => {
             queueSize: waitingQueue.size,
             activeSessions: activeSessions.size,
             connections: userConnections.size,
+            roomSubscribers: roomSubscribers.size,
             uptime: process.uptime()
         }));
     } else {
@@ -280,6 +357,12 @@ wss.on('connection', (ws: WebSocket) => {
             }
 
             switch (type) {
+                case 'subscribe_room':
+                    handleSubscribeRoom(ws, data);
+                    break;
+                case 'unsubscribe_room':
+                    handleUnsubscribeRoom(ws, data);
+                    break;
                 case 'join_queue':
                     handleJoinQueue(ws, data);
                     break;
@@ -308,6 +391,15 @@ wss.on('connection', (ws: WebSocket) => {
 
     ws.on('close', () => {
         clearInterval(heartbeat);
+
+        // Cleanup subscriptions
+        for (const [roomId, subscribers] of roomSubscribers) {
+            subscribers.delete(ws);
+            if (subscribers.size === 0) {
+                roomSubscribers.delete(roomId);
+            }
+        }
+
         if (userId) {
             cleanupUser(userId);
             console.log(`❌ Disconnected: ${userId}`);
@@ -319,9 +411,67 @@ wss.on('connection', (ws: WebSocket) => {
     });
 });
 
+
 // ============================================================
 // CLEANUP STALE ENTRIES (runs every minute)
 // ============================================================
+
+setInterval(() => {
+    const now = Date.now();
+    let cleaned = 0;
+
+    for (const [userId, user] of waitingQueue) {
+        if (now - user.joinedAt > QUEUE_TIMEOUT) {
+            send(user.ws, 'queue_timeout', { message: 'Search timed out' });
+            removeFromQueue(userId);
+            cleaned++;
+        }
+    }
+
+    if (cleaned > 0) {
+        console.log(`🧹 Cleaned ${cleaned} stale queue entries`);
+    }
+}, 60000);
+
+// ============================================================
+// START SERVER
+// ============================================================
+
+server.listen(PORT, () => {
+    console.log(`
+    ╔════════════════════════════════════════════════════════╗
+    ║   🚀 GURUKUL MATCHMAKING SERVER                        ║
+    ║                                                         ║
+    ║   Port: ${PORT}                                            ║
+    ║   Capacity: 10,000+ concurrent connections             ║
+    ║   Match latency: <5ms                                  ║
+    ║                                                         ║
+    ║   Endpoints:                                           ║
+    ║   - ws://localhost:${PORT}     (WebSocket)                 ║
+    ║   - http://localhost:${PORT}/health     (Health check)     ║
+    ╚════════════════════════════════════════════════════════╝
+    `);
+});
+
+// ============================================================
+// GRACEFUL SHUTDOWN
+// ============================================================
+
+process.on('SIGTERM', () => {
+    console.log('🛑 Shutting down...');
+
+    // Notify all connected users
+    for (const [userId, ws] of userConnections) {
+        send(ws, 'server_shutdown', { message: 'Server restarting...' });
+    }
+
+    wss.close(() => {
+        server.close(() => {
+            console.log('👋 Server closed');
+            process.exit(0);
+        });
+    });
+});
 
 setInterval(() => {
     const now = Date.now();
