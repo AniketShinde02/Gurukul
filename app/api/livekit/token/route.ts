@@ -2,6 +2,7 @@ import { AccessToken } from 'livekit-server-sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { rateLimit } from '@/lib/redis'
 
 export async function GET(req: NextRequest) {
     const room = req.nextUrl.searchParams.get('room')
@@ -48,6 +49,22 @@ export async function GET(req: NextRequest) {
         if (authError || !user) {
             console.error("Auth error:", authError)
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        // ✅ Rate limit: 20 token requests per minute per user
+        const { allowed, remaining } = await rateLimit(user.id, 'livekit-token', 20, 60)
+
+        if (!allowed) {
+            return NextResponse.json(
+                {
+                    error: 'Rate limit exceeded. Please wait before requesting another token.',
+                    retryAfter: 60
+                },
+                {
+                    status: 429,
+                    headers: { 'Retry-After': '60' }
+                }
+            )
         }
 
         // ✅ KISS PRINCIPLE: Skip validation for global channels

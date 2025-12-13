@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { WebhookReceiver } from 'livekit-server-sdk';
-import { redis, isRedisConfigured } from '@/lib/redis';
+import { redis, isRedisConfigured, RedisKeys } from '@/lib/redis';
 
 // Initialize Webhook Receiver
 const receiver = new WebhookReceiver(
@@ -27,36 +27,53 @@ export async function POST(request: NextRequest) {
             event.event === 'participant_left'
         ) {
             const roomName = room?.name;
-            if (!roomName) return new NextResponse('No room name', { status: 400 });
+            const participantId = participant?.identity;
 
-            console.log(`📡 Webhook: ${event.event} - ${participant?.identity} in ${roomName}`);
+            if (!roomName || !participantId) {
+                return new NextResponse('Invalid webhook data', { status: 400 });
+            }
+
+            console.log(`📡 Webhook: ${event.event} - ${participantId} in ${roomName}`);
+
+            // Parse roomName format: "roomId-ChannelName"
+            const parts = roomName.split('-');
+            const roomId = parts[0];
+            const channelName = parts.slice(1).join('-');
 
             if (isRedisConfigured()) {
-                const cacheKey = `participants:${roomName}`;
+                const redisKey = RedisKeys.voiceParticipants(roomId, channelName);
 
-                // 2. Invalidate the cache (force next fetch to get fresh data)
-                // Alternatively, we could maintain a Set in Redis, but deleting the key 
-                // is safer and simpler to ensure consistency with LiveKit's truth.
-                await redis.del(cacheKey);
+                // 1. Update Redis IMMEDIATELY (this is now the source of truth)
+                if (event.event === 'participant_joined') {
+                    await redis.sadd(redisKey, participantId);
+                } else {
+                    await redis.srem(redisKey, participantId);
+                }
 
-                // 3. Publish an update signal to Redis Pub/Sub
-                // The SSE stream will listen to this and trigger a client update
-                const channel = `updates:${roomName}`;
-                // Broadcast via WebSocket Server
-                // Use env var MATCHMAKING_SERVER_URL or default to localhost
+                // Set expiry to auto-clean (1 hour should be enough)
+                await redis.expire(redisKey, 3600);
+
+                // 2. Invalidate old participant cache (if it exists)
+                const oldCacheKey = `participants:${roomName}`;
+                await redis.del(oldCacheKey);
+
+                // 3. Broadcast via WebSocket Server
                 const wsServerUrl = process.env.MATCHMAKING_SERVER_URL || 'http://localhost:8080';
 
                 try {
+                    // Get current participant list from Redis
+                    const currentParticipants = await redis.smembers(redisKey);
+
                     await fetch(`${wsServerUrl}/broadcast`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ roomName, participants: [] })
+                        body: JSON.stringify({
+                            roomName,
+                            participants: currentParticipants
+                        })
                     });
                 } catch (wsError) {
                     console.warn('Failed to broadcast to WS server (is it running?):', wsError);
-                    // Fallback: Redis publish (client can listen if they want, but WS is preferred)
-                    const message = JSON.stringify({ type: 'PARTICIPANT_UPDATE', room: roomName });
-                    await redis.publish(channel, message);
                 }
             }
         }

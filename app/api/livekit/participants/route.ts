@@ -1,6 +1,6 @@
 import { RoomServiceClient } from 'livekit-server-sdk';
 import { NextResponse } from 'next/server';
-import { redis, isRedisConfigured } from '@/lib/redis';
+import { redis, isRedisConfigured, RedisKeys } from '@/lib/redis';
 
 const roomService = new RoomServiceClient(
     process.env.NEXT_PUBLIC_LIVEKIT_URL!,
@@ -16,30 +16,42 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Missing room name' }, { status: 400 });
     }
 
-    // Cache key for this room's participants
-    const cacheKey = `participants:${roomName}`;
+    // Parse roomName format: "roomId-ChannelName"
+    const parts = roomName.split('-');
+    const roomId = parts[0];
+    const channelName = parts.slice(1).join('-');
 
     try {
-        // 1. Try Cache First (if configured)
+        // 1. Try Redis FIRST (instant response, source of truth)
         if (isRedisConfigured()) {
-            const cachedData = await redis.get(cacheKey);
-            if (cachedData) {
-                // console.log('✅ Cache HIT for:', roomName); // Uncommon to log usage in prod
-                return NextResponse.json(cachedData);
+            const redisKey = RedisKeys.voiceParticipants(roomId, channelName);
+            const participants = await redis.smembers(redisKey);
+
+            if (participants && participants.length > 0) {
+                // Cache HIT - return immediately
+                // Map to expected format: { sid, identity }
+                return NextResponse.json(
+                    participants.map(identity => ({
+                        sid: identity,
+                        identity
+                    }))
+                );
             }
         }
 
-        // 2. Fetch from LiveKit (Cache MISS)
-        // console.log('❌ Cache MISS for:', roomName);
-        const participants = await roomService.listParticipants(roomName);
+        // 2. Cache MISS - Fetch from LiveKit (room might be new or Redis not configured)
+        const liveParticipants = await roomService.listParticipants(roomName);
 
-        // 3. Store in Cache (TTL: 5 seconds - same as poll interval)
-        if (isRedisConfigured()) {
-            // Use 'ex' (seconds) for expiration
-            await redis.set(cacheKey, participants, { ex: 5 });
+        // 3. Populate Redis for next request (if participants exist)
+        if (isRedisConfigured() && liveParticipants.length > 0) {
+            const redisKey = RedisKeys.voiceParticipants(roomId, channelName);
+            const identities = liveParticipants.map(p => p.identity);
+
+            await redis.sadd(redisKey, ...(identities as [string, ...string[]]));
+            await redis.expire(redisKey, 3600); // 1 hour TTL
         }
 
-        return NextResponse.json(participants);
+        return NextResponse.json(liveParticipants);
 
     } catch (error: any) {
         // Suppress "room does not exist" error as it just means the room is empty/inactive
