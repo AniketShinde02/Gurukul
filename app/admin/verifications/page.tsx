@@ -128,111 +128,109 @@ export default function AdminVerificationsPage() {
     }
 
     return (
-        <div className="min-h-screen bg-stone-950 text-stone-200 p-8">
-            <div className="max-w-6xl mx-auto space-y-8">
-                <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                            <Shield className="text-orange-500" /> Admin Verifications
-                        </h1>
-                        <p className="text-stone-400">Review pending student ID requests.</p>
-                    </div>
-                    <Badge variant="outline" className="border-orange-500/50 text-orange-500">
-                        {requests.length} Pending
-                    </Badge>
+        <div className="space-y-8">
+            <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                    <h2 className="text-3xl font-bold text-white flex items-center gap-2">
+                        Verification Requests
+                    </h2>
+                    <p className="text-stone-400">Review pending student ID requests.</p>
                 </div>
+                <Badge variant="outline" className="border-orange-500/50 text-orange-500 px-4 py-1">
+                    {requests.length} Pending
+                </Badge>
+            </div>
 
-                <div className="grid grid-cols-1 gap-6">
-                    {requests.length === 0 ? (
-                        <div className="text-center py-20 bg-stone-900/50 rounded-2xl border border-white/5">
-                            <GraduationCap className="w-12 h-12 text-stone-600 mx-auto mb-4" />
-                            <h3 className="text-xl font-bold text-stone-400">All caught up!</h3>
-                            <p className="text-stone-500">No pending verification requests.</p>
-                        </div>
-                    ) : (
-                        requests.map((req) => (
-                            <div key={req.id} className="bg-stone-900/80 border border-white/10 rounded-2xl overflow-hidden flex flex-col md:flex-row">
-                                {/* Image Preview Section */}
-                                <div className="md:w-1/3 bg-black/50 p-4 flex items-center justify-center border-b md:border-b-0 md:border-r border-white/10">
-                                    {req.method === 'document' ? (
-                                        req.document_url ? (
-                                            // Note: In real prod, use signed URLs for private buckets. 
-                                            // The SQL I gave makes verification-docs private, 
-                                            // so we need createSignedUrl logic. For MVP/Demo I made a public view policy for admins.
-                                            // Actually, getPublicUrl won't work if bucket is private.
-                                            // I'll add a helper to fetch signed URL immediately.
-                                            <SecureImage path={req.document_url} />
-                                        ) : (
-                                            <span className="text-stone-500">No document attached</span>
-                                        )
+            <div className="grid grid-cols-1 gap-6">
+                {requests.length === 0 ? (
+                    <div className="text-center py-20 bg-stone-900/50 rounded-2xl border border-white/5">
+                        <GraduationCap className="w-12 h-12 text-stone-600 mx-auto mb-4" />
+                        <h3 className="text-xl font-bold text-stone-400">All caught up!</h3>
+                        <p className="text-stone-500">No pending verification requests.</p>
+                    </div>
+                ) : (
+                    requests.map((req) => (
+                        <div key={req.id} className="bg-stone-900/80 border border-white/10 rounded-2xl overflow-hidden flex flex-col md:flex-row">
+                            {/* Image Preview Section */}
+                            <div className="md:w-1/3 bg-black/50 p-4 flex items-center justify-center border-b md:border-b-0 md:border-r border-white/10">
+                                {req.method === 'document' ? (
+                                    req.document_url ? (
+                                        // Note: In real prod, use signed URLs for private buckets. 
+                                        // The SQL I gave makes verification-docs private, 
+                                        // so we need createSignedUrl logic. For MVP/Demo I made a public view policy for admins.
+                                        // Actually, getPublicUrl won't work if bucket is private.
+                                        // I'll add a helper to fetch signed URL immediately.
+                                        <SecureImage path={req.document_url} />
                                     ) : (
-                                        <div className="flex flex-col items-center gap-2 text-stone-400">
-                                            <Mail className="w-12 h-12" />
-                                            <span>Email Verification</span>
+                                        <span className="text-stone-500">No document attached</span>
+                                    )
+                                ) : (
+                                    <div className="flex flex-col items-center gap-2 text-stone-400">
+                                        <Mail className="w-12 h-12" />
+                                        <span>Email Verification</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Details Section */}
+                            <div className="flex-1 p-6 flex flex-col justify-between gap-4">
+                                <div>
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-full bg-stone-800 flex items-center justify-center text-lg font-bold text-stone-400">
+                                            {req.profile?.username?.[0]?.toUpperCase()}
                                         </div>
-                                    )}
+                                        <div>
+                                            <h3 className="font-bold text-white text-lg">@{req.profile?.username}</h3>
+                                            <p className="text-sm text-stone-500">{req.profile?.full_name}</p>
+                                        </div>
+                                        <Badge className="ml-auto bg-blue-500/20 text-blue-400 border-none">
+                                            {req.method === 'email' ? 'Email' : 'ID Card'}
+                                        </Badge>
+                                    </div>
+
+                                    <div className="space-y-2 text-sm text-stone-300">
+                                        {req.method === 'email' ? (
+                                            <div className="p-3 bg-stone-950 rounded-lg font-mono border border-white/5">
+                                                {req.school_email}
+                                            </div>
+                                        ) : (
+                                            <p className="italic text-stone-500">
+                                                Submitted specific document for visual review. Check for valid dates and name match.
+                                            </p>
+                                        )}
+                                        <p className="text-xs text-stone-600 mt-2">
+                                            Requested on: {new Date(req.created_at).toLocaleDateString()}
+                                        </p>
+                                    </div>
                                 </div>
 
-                                {/* Details Section */}
-                                <div className="flex-1 p-6 flex flex-col justify-between gap-4">
-                                    <div>
-                                        <div className="flex items-center gap-3 mb-4">
-                                            <div className="w-10 h-10 rounded-full bg-stone-800 flex items-center justify-center text-lg font-bold text-stone-400">
-                                                {req.profile?.username?.[0]?.toUpperCase()}
-                                            </div>
-                                            <div>
-                                                <h3 className="font-bold text-white text-lg">@{req.profile?.username}</h3>
-                                                <p className="text-sm text-stone-500">{req.profile?.full_name}</p>
-                                            </div>
-                                            <Badge className="ml-auto bg-blue-500/20 text-blue-400 border-none">
-                                                {req.method === 'email' ? 'Email' : 'ID Card'}
-                                            </Badge>
-                                        </div>
-
-                                        <div className="space-y-2 text-sm text-stone-300">
-                                            {req.method === 'email' ? (
-                                                <div className="p-3 bg-stone-950 rounded-lg font-mono border border-white/5">
-                                                    {req.school_email}
-                                                </div>
-                                            ) : (
-                                                <p className="italic text-stone-500">
-                                                    Submitted specific document for visual review. Check for valid dates and name match.
-                                                </p>
-                                            )}
-                                            <p className="text-xs text-stone-600 mt-2">
-                                                Requested on: {new Date(req.created_at).toLocaleDateString()}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-3 mt-auto pt-4 border-t border-white/5">
-                                        <Button
-                                            onClick={() => handleDecision(req.id, req.user_id, 'rejected')}
-                                            disabled={!!processing}
-                                            variant="outline"
-                                            className="flex-1 border-red-500/20 text-red-500 hover:bg-red-500/10 hover:text-red-400"
-                                        >
-                                            <X className="w-4 h-4 mr-2" /> Reject
-                                        </Button>
-                                        <Button
-                                            onClick={() => handleDecision(req.id, req.user_id, 'verified')}
-                                            disabled={!!processing}
-                                            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                                        >
-                                            {processing === req.id ? (
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                            ) : (
-                                                <>
-                                                    <Check className="w-4 h-4 mr-2" /> Approve
-                                                </>
-                                            )}
-                                        </Button>
-                                    </div>
+                                <div className="flex items-center gap-3 mt-auto pt-4 border-t border-white/5">
+                                    <Button
+                                        onClick={() => handleDecision(req.id, req.user_id, 'rejected')}
+                                        disabled={!!processing}
+                                        variant="outline"
+                                        className="flex-1 border-red-500/20 text-red-500 hover:bg-red-500/10 hover:text-red-400"
+                                    >
+                                        <X className="w-4 h-4 mr-2" /> Reject
+                                    </Button>
+                                    <Button
+                                        onClick={() => handleDecision(req.id, req.user_id, 'verified')}
+                                        disabled={!!processing}
+                                        className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                    >
+                                        {processing === req.id ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <>
+                                                <Check className="w-4 h-4 mr-2" /> Approve
+                                            </>
+                                        )}
+                                    </Button>
                                 </div>
                             </div>
-                        ))
-                    )}
-                </div>
+                        </div>
+                    ))
+                )}
             </div>
         </div>
     )

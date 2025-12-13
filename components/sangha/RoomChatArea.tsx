@@ -18,6 +18,7 @@ import { awardXP, XP_RATES } from '@/lib/xp'
 import { useOptimisticMessages } from '@/hooks/useOptimisticMessages'
 import { MessageList } from '@/components/MessageList'
 import { RoomMessage } from '@/hooks/useMessages'
+import { useTypingIndicator, TypingIndicator } from '@/hooks/useTypingIndicator'
 
 export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: string, roomName: string, isSidebar?: boolean }) {
     const [newMessage, setNewMessage] = useState('')
@@ -29,6 +30,9 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
     const [replyTo, setReplyTo] = useState<RoomMessage | null>(null)
     const [editingMessage, setEditingMessage] = useState<RoomMessage | null>(null)
     const [previewImage, setPreviewImage] = useState<string | null>(null)
+    const [showPinnedMessages, setShowPinnedMessages] = useState(false)
+    const [pinnedMessages, setPinnedMessages] = useState<any[]>([])
+    const [loadingPins, setLoadingPins] = useState(false)
 
     const emojiPickerRef = useRef<HTMLDivElement>(null)
     const gifPickerRef = useRef<HTMLDivElement>(null)
@@ -37,6 +41,7 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
 
     const { can } = useServerPermissions(roomId, currentUserId || undefined)
     const { sendMessage, isSending } = useOptimisticMessages(roomId)
+    const { typingUsers, startTyping, stopTyping } = useTypingIndicator(roomId, currentUserId || '')
 
     useEffect(() => {
         const getUser = async () => {
@@ -56,6 +61,75 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
         }
         getUser()
     }, [])
+
+    // Fetch pinned messages
+    const fetchPinnedMessages = async () => {
+        setLoadingPins(true)
+        try {
+            const { data, error } = await supabase
+                .from('room_pinned_messages')
+                .select(`
+                    id,
+                    message_id,
+                    pinned_by,
+                    created_at,
+                    room_messages (
+                        id,
+                        content,
+                        user_id,
+                        created_at,
+                        profiles:user_id (username, avatar_url)
+                    )
+                `)
+                .order('created_at', { ascending: false })
+
+            if (error) throw error
+            setPinnedMessages(data || [])
+        } catch (error) {
+            console.error('Error fetching pinned messages:', error)
+        } finally {
+            setLoadingPins(false)
+        }
+    }
+
+    // Pin a message
+    const handlePinMessage = async (messageId: string) => {
+        if (!currentUserId) return
+        try {
+            const { error } = await supabase
+                .from('room_pinned_messages')
+                .insert({
+                    message_id: messageId,
+                    pinned_by: currentUserId
+                })
+
+            if (error) throw error
+            toast.success('Message pinned!')
+            fetchPinnedMessages()
+        } catch (error: any) {
+            if (error.code === '23505') {
+                toast.error('Message already pinned')
+            } else {
+                toast.error('Failed to pin message')
+            }
+        }
+    }
+
+    // Unpin a message
+    const handleUnpinMessage = async (pinId: string) => {
+        try {
+            const { error } = await supabase
+                .from('room_pinned_messages')
+                .delete()
+                .eq('id', pinId)
+
+            if (error) throw error
+            toast.success('Message unpinned')
+            setPinnedMessages(prev => prev.filter(p => p.id !== pinId))
+        } catch (error) {
+            toast.error('Failed to unpin message')
+        }
+    }
 
     // Close pickers checks
     useEffect(() => {
@@ -236,7 +310,70 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
 
                     <div className="flex items-center gap-4 text-stone-400">
                         <Bell className="w-5 h-5 hover:text-white cursor-pointer transition-colors" />
-                        <Pin className="w-5 h-5 hover:text-white cursor-pointer transition-colors" />
+
+                        {/* Pinned Messages Button */}
+                        <DropdownMenu open={showPinnedMessages} onOpenChange={(open) => {
+                            setShowPinnedMessages(open)
+                            if (open) fetchPinnedMessages()
+                        }}>
+                            <DropdownMenuTrigger asChild>
+                                <button className={`relative ${showPinnedMessages ? 'text-orange-500' : 'hover:text-white'} transition-colors`}>
+                                    <Pin className="w-5 h-5" />
+                                    {pinnedMessages.length > 0 && (
+                                        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-orange-500 rounded-full text-[9px] font-bold flex items-center justify-center text-white">
+                                            {pinnedMessages.length}
+                                        </span>
+                                    )}
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto bg-stone-900 border-white/10">
+                                <div className="p-3 border-b border-white/10">
+                                    <h3 className="font-bold text-white flex items-center gap-2">
+                                        <Pin className="w-4 h-4 text-orange-500" />
+                                        Pinned Messages
+                                    </h3>
+                                </div>
+                                {loadingPins ? (
+                                    <div className="p-4 flex justify-center">
+                                        <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
+                                    </div>
+                                ) : pinnedMessages.length === 0 ? (
+                                    <div className="p-6 text-center text-stone-500">
+                                        <Pin className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                        <p className="text-sm">No pinned messages yet</p>
+                                        <p className="text-xs mt-1">Click the pin icon on any message to pin it</p>
+                                    </div>
+                                ) : (
+                                    <div className="p-2 space-y-2">
+                                        {pinnedMessages.map((pin) => (
+                                            <div key={pin.id} className="p-2 rounded-lg bg-stone-800/50 hover:bg-stone-800 transition-colors group">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs text-orange-400 font-medium mb-1">
+                                                            {pin.room_messages?.profiles?.username || 'Unknown'}
+                                                        </p>
+                                                        <p className="text-sm text-stone-200 line-clamp-2">
+                                                            {pin.room_messages?.content || 'Message deleted'}
+                                                        </p>
+                                                        <p className="text-[10px] text-stone-500 mt-1">
+                                                            {new Date(pin.created_at).toLocaleDateString()}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleUnpinMessage(pin.id)}
+                                                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
+                                                        title="Unpin"
+                                                    >
+                                                        <X className="w-3 h-3 text-red-400" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+
                         <Users className="w-5 h-5 hover:text-white cursor-pointer transition-colors lg:hidden" />
                     </div>
                 </div>
@@ -258,8 +395,12 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
                     }}
                     onDelete={handleDeleteMessage}
                     onImageClick={setPreviewImage}
+                    onPin={handlePinMessage}
                 />
             </div>
+
+            {/* Typing Indicator */}
+            <TypingIndicator typingUsers={typingUsers} />
 
             {/* Input Area */}
             {can('send_messages') ? (
@@ -359,7 +500,15 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
                             <input
                                 ref={inputRef}
                                 value={newMessage}
-                                onChange={(e) => setNewMessage(e.target.value)}
+                                onChange={(e) => {
+                                    setNewMessage(e.target.value)
+                                    if (e.target.value && currentUser?.username) {
+                                        startTyping(currentUser.username)
+                                    } else {
+                                        stopTyping()
+                                    }
+                                }}
+                                onBlur={() => stopTyping()}
                                 placeholder={`Write a message...`}
                                 className="w-full bg-transparent border-none text-stone-200 placeholder:text-stone-500 focus:outline-none px-2 text-sm"
                             />

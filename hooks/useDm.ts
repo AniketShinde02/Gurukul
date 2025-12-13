@@ -29,6 +29,7 @@ export type DmMessage = {
     file_name?: string | null
     file_size?: number | null
     file_type?: string | null
+    dm_reactions?: { emoji: string, user_id: string }[]
 }
 
 export function useDm() {
@@ -412,6 +413,38 @@ export function useDm() {
         }
     }
 
+    const addReaction = async (messageId: string, emoji: string) => {
+        if (!currentUserId) return
+
+        // 1. Optimistic Update
+        setMessages(prev => prev.map(msg => {
+            if (msg.id === messageId) {
+                const existing = msg.dm_reactions || []
+                if (existing.some(r => r.user_id === currentUserId && r.emoji === emoji)) return msg
+                return {
+                    ...msg,
+                    dm_reactions: [...existing, { emoji, user_id: currentUserId }]
+                }
+            }
+            return msg
+        }))
+
+        try {
+            const { error } = await supabase
+                .from('dm_reactions')
+                .insert({
+                    message_id: messageId,
+                    user_id: currentUserId,
+                    emoji
+                })
+
+            if (error) throw error
+        } catch (error) {
+            console.error('Reaction error:', error)
+            toast.error('Failed to add reaction')
+        }
+    }
+
     return {
         conversations,
         activeConversationId,
@@ -427,6 +460,7 @@ export function useDm() {
         deleteConversation,
         archiveConversation: deleteConversation,
         startDm,
+        addReaction,
         currentUserId
     }
 }

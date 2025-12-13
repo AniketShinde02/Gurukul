@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from 'react'
 import { RoomMessage, useMessages } from '@/hooks/useMessages'
-import { Loader2, Reply, Copy, Edit2, Trash2, Image as ImageIcon, File as FileIcon } from 'lucide-react'
+import { Loader2, Reply, Copy, Edit2, Trash2, Image as ImageIcon, File as FileIcon, Pin } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Linkify } from '@/components/ui/linkify'
 import { format } from 'date-fns'
@@ -19,10 +19,11 @@ const MessageRow = React.memo(({ index, style, data }: {
         onReply: (msg: RoomMessage) => void,
         onEdit: (msg: RoomMessage) => void,
         onDelete: (msgId: string) => void,
-        onImageClick: (url: string) => void
+        onImageClick: (url: string) => void,
+        onPin?: (msgId: string) => void
     }
 }) => {
-    const { messages, currentUserId, setSize, onReply, onEdit, onDelete, onImageClick } = data
+    const { messages, currentUserId, setSize, onReply, onEdit, onDelete, onImageClick, onPin } = data
     const messageIndex = messages.length - 1 - index
     const msg = messages[messageIndex]
 
@@ -137,6 +138,16 @@ const MessageRow = React.memo(({ index, style, data }: {
                                         <Copy className="w-3.5 h-3.5" />
                                     </button>
 
+                                    {onPin && (
+                                        <button
+                                            onClick={() => onPin(msg.id)}
+                                            className="p-1.5 text-stone-400 hover:text-orange-500 hover:bg-orange-500/10 rounded transition-colors"
+                                            title="Pin Message"
+                                        >
+                                            <Pin className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
+
                                     {msg.type === 'text' && isMe && (
                                         <button
                                             onClick={() => onEdit(msg)}
@@ -178,14 +189,16 @@ export function MessageList({
     onReply,
     onEdit,
     onDelete,
-    onImageClick
+    onImageClick,
+    onPin
 }: {
     roomId: string,
     currentUserId: string | null,
     onReply: (msg: RoomMessage) => void,
     onEdit: (msg: RoomMessage) => void,
     onDelete: (msgId: string) => void,
-    onImageClick: (url: string) => void
+    onImageClick: (url: string) => void,
+    onPin?: (msgId: string) => void
 }) {
     const { messages, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } = useMessages(roomId)
     const listRef = useRef<HTMLDivElement>(null)
@@ -232,7 +245,7 @@ export function MessageList({
                         key={msg.id}
                         index={messages.length - 1 - index}
                         style={{}}
-                        data={{ messages, currentUserId, setSize: () => { }, onReply, onEdit, onDelete, onImageClick }}
+                        data={{ messages, currentUserId, setSize: () => { }, onReply, onEdit, onDelete, onImageClick, onPin }}
                     />
                 ))}
                 {isFetchingNextPage && (

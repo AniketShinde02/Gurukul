@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react
 import { useDm } from '@/hooks/useDm'
 import { useSound } from '@/hooks/useSound'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Phone, Video, Info, PlusCircle, Smile, Gift, Sticker, Trash2, MoreVertical, X, Image as ImageIcon, FileText, Paperclip, Copy } from 'lucide-react'
+import { Phone, Video, Info, PlusCircle, Smile, Gift, Sticker, Trash2, MoreVertical, X, Image as ImageIcon, FileText, Paperclip, Copy, Search, Pin, Loader2 } from 'lucide-react'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from '@/components/ui/button'
 import { Linkify } from '@/components/ui/linkify'
+import { supabase } from '@/lib/supabase/client'
 
 export function ChatArea({ conversationId, onClose }: { conversationId: string, onClose?: () => void }) {
     const {
@@ -31,7 +32,8 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
         deleteMessage,
         deleteConversation,
         currentUserId,
-        setActiveConversationId
+        setActiveConversationId,
+        addReaction
     } = useDm()
 
     const { play } = useSound()
@@ -40,6 +42,16 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
     const [showGifPicker, setShowGifPicker] = useState(false)
     const [isDragging, setIsDragging] = useState(false)
     const [previewImage, setPreviewImage] = useState<string | null>(null)
+    const [showSearch, setShowSearch] = useState(false)
+    const [searchTerm, setSearchTerm] = useState('')
+
+    const filteredMessages = searchTerm
+        ? messages.filter(m => m.content.toLowerCase().includes(searchTerm.toLowerCase()))
+        : messages
+
+    const [showPinnedMessages, setShowPinnedMessages] = useState(false)
+    const [pinnedMessages, setPinnedMessages] = useState<any[]>([])
+    const [loadingPins, setLoadingPins] = useState(false)
 
     const scrollRef = useRef<HTMLDivElement>(null)
     const emojiPickerRef = useRef<HTMLDivElement>(null)
@@ -83,6 +95,74 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
     const handleCopyText = (text: string) => {
         navigator.clipboard.writeText(text)
         toast.success('Text copied')
+    }
+
+    // Fetch pinned DM messages
+    const fetchPinnedMessages = async () => {
+        setLoadingPins(true)
+        try {
+            const { data, error } = await supabase
+                .from('dm_pinned_messages')
+                .select(`
+                    id,
+                    message_id,
+                    pinned_by,
+                    created_at,
+                    dm_messages (
+                        id,
+                        content,
+                        sender_id,
+                        created_at
+                    )
+                `)
+                .order('created_at', { ascending: false })
+
+            if (error) throw error
+            setPinnedMessages(data || [])
+        } catch (error) {
+            console.error('Error fetching pinned messages:', error)
+        } finally {
+            setLoadingPins(false)
+        }
+    }
+
+    // Pin a DM message
+    const handlePinMessage = async (messageId: string) => {
+        if (!currentUserId) return
+        try {
+            const { error } = await supabase
+                .from('dm_pinned_messages')
+                .insert({
+                    message_id: messageId,
+                    pinned_by: currentUserId
+                })
+
+            if (error) throw error
+            toast.success('Message pinned!')
+            fetchPinnedMessages()
+        } catch (error: any) {
+            if (error.code === '23505') {
+                toast.error('Message already pinned')
+            } else {
+                toast.error('Failed to pin message')
+            }
+        }
+    }
+
+    // Unpin a DM message
+    const handleUnpinMessage = async (pinId: string) => {
+        try {
+            const { error } = await supabase
+                .from('dm_pinned_messages')
+                .delete()
+                .eq('id', pinId)
+
+            if (error) throw error
+            toast.success('Message unpinned')
+            setPinnedMessages(prev => prev.filter(p => p.id !== pinId))
+        } catch (error) {
+            toast.error('Failed to unpin message')
+        }
     }
 
     // Sync active ID
@@ -253,6 +333,70 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
                         <Video className="w-5 h-5" />
                     </Button>
 
+                    <Button variant="ghost" size="icon" className={`hover:text-white hover:bg-white/5 ${showSearch ? 'text-orange-500 bg-white/5' : ''}`} onClick={() => { setShowSearch(!showSearch); if (!showSearch) setSearchTerm('') }}>
+                        <Search className="w-5 h-5" />
+                    </Button>
+
+                    {/* Pinned Messages */}
+                    <DropdownMenu open={showPinnedMessages} onOpenChange={(open) => {
+                        setShowPinnedMessages(open)
+                        if (open) fetchPinnedMessages()
+                    }}>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className={`relative hover:text-white hover:bg-white/5 ${showPinnedMessages ? 'text-orange-500 bg-white/5' : ''}`}>
+                                <Pin className="w-5 h-5" />
+                                {pinnedMessages.length > 0 && (
+                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full text-[10px] font-bold flex items-center justify-center text-white">
+                                        {pinnedMessages.length}
+                                    </span>
+                                )}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-80 max-h-96 overflow-y-auto bg-stone-900 border-white/10">
+                            <div className="p-3 border-b border-white/10">
+                                <h3 className="font-bold text-white flex items-center gap-2">
+                                    <Pin className="w-4 h-4 text-orange-500" />
+                                    Pinned Messages
+                                </h3>
+                            </div>
+                            {loadingPins ? (
+                                <div className="p-4 flex justify-center">
+                                    <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
+                                </div>
+                            ) : pinnedMessages.length === 0 ? (
+                                <div className="p-6 text-center text-stone-500">
+                                    <Pin className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                    <p className="text-sm">No pinned messages yet</p>
+                                    <p className="text-xs mt-1">Hover a message and click 📌 to pin</p>
+                                </div>
+                            ) : (
+                                <div className="p-2 space-y-2">
+                                    {pinnedMessages.map((pin) => (
+                                        <div key={pin.id} className="p-2 rounded-lg bg-stone-800/50 hover:bg-stone-800 transition-colors group">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm text-stone-200 line-clamp-2">
+                                                        {pin.dm_messages?.content || 'Message deleted'}
+                                                    </p>
+                                                    <p className="text-[10px] text-stone-500 mt-1">
+                                                        {new Date(pin.created_at).toLocaleDateString()}
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleUnpinMessage(pin.id)}
+                                                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
+                                                    title="Unpin"
+                                                >
+                                                    <X className="w-3 h-3 text-red-400" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="hover:text-white hover:bg-white/5">
@@ -283,6 +427,32 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
                     </Button>
                 </div>
             </div>
+
+            {/* Search Bar */}
+            <AnimatePresence>
+                {showSearch && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="border-b border-white/5 bg-stone-900/50 backdrop-blur-md overflow-hidden relative"
+                    >
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-500" />
+                        <input
+                            autoFocus
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Search in conversation..."
+                            className="w-full bg-transparent border-none py-3 pl-10 pr-4 text-sm text-white placeholder:text-stone-500 focus:outline-none"
+                        />
+                        {searchTerm && (
+                            <button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-500 hover:text-white">
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Messages */}
             <div
@@ -330,7 +500,7 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
                         </div>
                     ) : (
                         <AnimatePresence initial={false}>
-                            {messages.map((msg, idx) => {
+                            {filteredMessages.map((msg, idx) => {
                                 const isMe = msg.sender_id === currentUserId
 
                                 return (
@@ -344,7 +514,7 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
                                         <div className={`flex max-w-[80%] md:max-w-[70%] gap-3 ${isMe ? 'flex-row-reverse' : 'flex-row'} items-end`}>
                                             {/* Avatar */}
                                             <Avatar className="w-8 h-8 mb-1 border border-white/10 shrink-0">
-                                                <AvatarImage src={isMe ? undefined : activeConversation.otherUser.avatar_url || undefined} />
+                                                <AvatarImage loading="lazy" src={isMe ? undefined : activeConversation.otherUser.avatar_url || undefined} />
                                                 <AvatarFallback className="bg-stone-800 text-stone-300 text-xs">
                                                     {isMe ? 'ME' : activeConversation.otherUser.username[0].toUpperCase()}
                                                 </AvatarFallback>
@@ -431,6 +601,24 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
                                                     {/* Minimal Action Bar (Side of Message) */}
                                                     {!msg.is_deleted && (
                                                         <div className={`opacity-0 group-hover/bubble:opacity-100 transition-all duration-200 flex items-center gap-1`}>
+                                                            {/* Reaction */}
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <button className="p-1.5 text-stone-500 hover:text-yellow-400 transition-colors" title="Add Reaction">
+                                                                        <Smile className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent className="w-auto p-0 border-none bg-transparent shadow-none" side="top">
+                                                                    <EmojiPicker
+                                                                        onEmojiClick={(e) => addReaction(msg.id, e.emoji)}
+                                                                        width={300}
+                                                                        height={350}
+                                                                        theme={Theme.DARK}
+                                                                        lazyLoadEmojis={true}
+                                                                    />
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+
                                                             {/* Reply */}
                                                             <button
                                                                 className="p-1.5 text-stone-500 hover:text-white transition-colors"
@@ -439,13 +627,21 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
                                                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 14 4 9 9 4" /><path d="M20 20v-7a4 4 0 0 0-4-4H4" /></svg>
                                                             </button>
 
-                                                            {/* Copy */}
                                                             <button
                                                                 onClick={() => handleCopyText(msg.content)}
                                                                 className="p-1.5 text-stone-500 hover:text-white transition-colors"
                                                                 title="Copy Text"
                                                             >
                                                                 <Copy className="w-3.5 h-3.5" />
+                                                            </button>
+
+                                                            {/* Pin */}
+                                                            <button
+                                                                onClick={() => handlePinMessage(msg.id)}
+                                                                className="p-1.5 text-stone-500 hover:text-orange-500 transition-colors"
+                                                                title="Pin Message"
+                                                            >
+                                                                <Pin className="w-3.5 h-3.5" />
                                                             </button>
 
                                                             {/* Delete (Only Me) */}
@@ -461,6 +657,28 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
                                                         </div>
                                                     )}
                                                 </div>
+
+                                                {/* Reactions Display */}
+                                                {msg.dm_reactions && msg.dm_reactions.length > 0 && (
+                                                    <div className={`mt-1 flex flex-wrap gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                                        {Object.entries(msg.dm_reactions.reduce((acc: any, r) => {
+                                                            acc[r.emoji] = (acc[r.emoji] || 0) + 1
+                                                            return acc
+                                                        }, {})).map(([emoji, count]: any) => (
+                                                            <button
+                                                                key={emoji}
+                                                                onClick={() => addReaction(msg.id, emoji)}
+                                                                className={`text-[10px] px-1.5 py-0.5 rounded-full border transition-colors flex items-center gap-1
+                                                                    ${msg.dm_reactions?.some(r => r.user_id === currentUserId && r.emoji === emoji)
+                                                                        ? 'bg-orange-500/20 border-orange-500/30 text-orange-200 hover:bg-orange-500/30'
+                                                                        : 'bg-stone-800 border-white/5 text-stone-300 hover:bg-stone-700'}`}
+                                                            >
+                                                                <span>{emoji}</span>
+                                                                <span className="opacity-70 font-medium">{count}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </motion.div>

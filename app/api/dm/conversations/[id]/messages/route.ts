@@ -52,7 +52,7 @@ export async function GET(
 
         let query = supabase
             .from('dm_messages')
-            .select('*')
+            .select('*, dm_reactions(emoji, user_id)')
             .eq('conversation_id', params.id)
             .order('created_at', { ascending: false })
             .limit(limit)

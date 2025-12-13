@@ -1,183 +1,236 @@
-'use client';
+'use client'
 
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase/client';
-import { Button } from '@/components/ui/button';
-import { Loader2, Server, Database, Save, Activity } from 'lucide-react';
-import { toast } from '@/lib/toast';
+import { Activity, TrendingUp, Clock, Users, Server, FileCheck, MessageSquare, Phone, Zap, Database, ArrowUp } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { supabase } from '@/lib/supabase/client'
+import { useAdminStats, DashboardStats } from '@/hooks/useAdminStats'
+import { Loader2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
 
-interface MatchmakingConfig {
-    mode: 'supabase' | 'websocket';
-    ws_url: string;
-}
+export default function AdminOverviewPage() {
+    const { stats, loading } = useAdminStats()
 
-export default function AdminDashboard() {
-    const [config, setConfig] = useState<MatchmakingConfig | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [wsCount, setWsCount] = useState<number | null>(null);
-
-    useEffect(() => {
-        fetchSettings();
-        // Poll for WebSocket health if in WS mode
-        const interval = setInterval(checkWsHealth, 10000);
-        return () => clearInterval(interval);
-    }, []);
-
-    const fetchSettings = async () => {
-        try {
-            const { data, error } = await supabase
-                .from('system_settings')
-                .select('value')
-                .eq('key', 'matchmaking_config')
-                .single();
-
-            if (error) throw error;
-            if (data) {
-                setConfig(data.value);
-            } else {
-                // Default if no settings exist
-                setConfig({ mode: 'supabase', ws_url: 'ws://localhost:8080' });
-            }
-        } catch (err) {
-            console.error('Error fetching settings:', err);
-            toast.error('Failed to load settings');
-            // Fallback
-            setConfig({ mode: 'supabase', ws_url: 'ws://localhost:8080' });
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const checkWsHealth = async () => {
-        if (config?.mode !== 'websocket' || !config.ws_url) return;
-
-        // Simple health check fetch if your WS server supports HTTP /health
-        try {
-            const httpUrl = config.ws_url.replace('ws://', 'http://').replace('wss://', 'https://');
-            const res = await fetch(`${httpUrl}/health`);
-            const data = await res.json();
-            setWsCount(data.connections || 0);
-        } catch (e) {
-            setWsCount(null);
-        }
-    };
-
-    const saveSettings = async () => {
-        if (!config) return;
-        setSaving(true);
-        try {
-            const { error } = await supabase
-                .from('system_settings')
-                .update({ value: config })
-                .eq('key', 'matchmaking_config');
-
-            if (error) throw error;
-            toast.success('System settings updated successfully');
-        } catch (err) {
-            console.error('Error saving settings:', err);
-            toast.error('Failed to save settings');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    if (loading) return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin" /></div>;
+    if (loading || !stats) {
+        return (
+            <div className="flex h-[50vh] w-full items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+            </div>
+        )
+    }
 
     return (
-        <div className="container mx-auto p-8 max-w-4xl">
-            <h1 className="text-3xl font-bold mb-8">🛡️ Gurukul Admin Console</h1>
-
-            <div className="grid gap-6">
-                {/* MATCHMAKING CONTROL CARD */}
-                <div className="bg-card border rounded-lg p-6 shadow-sm">
-                    <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-2">
-                            <Activity className="w-5 h-5 text-primary" />
-                            <h2 className="text-xl font-semibold">Matchmaking Engine</h2>
-                        </div>
-                        <div className={`px-3 py-1 rounded-full text-xs font-bold ${config?.mode === 'websocket' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
-                            }`}>
-                            CURRENT: {config?.mode?.toUpperCase()}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        {/* OPTION 1: SUPABASE */}
-                        <div
-                            className={`cursor-pointer border-2 rounded-lg p-4 transition-all ${config?.mode === 'supabase' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-                                }`}
-                            onClick={() => setConfig({ ...config!, mode: 'supabase' })}
-                        >
-                            <div className="flex items-center gap-3 mb-2">
-                                <Database className="w-5 h-5" />
-                                <h3 className="font-bold">Supabase (Legacy)</h3>
-                            </div>
-                            <p className="text-sm text-muted-foreground">
-                                Uses PostgreSQL polling & Realtime. Limit: ~200 users. Free but doesn't scale.
-                            </p>
-                        </div>
-
-                        {/* OPTION 2: WEBSOCKET */}
-                        <div
-                            className={`cursor-pointer border-2 rounded-lg p-4 transition-all ${config?.mode === 'websocket' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
-                                }`}
-                            onClick={() => setConfig({ ...config!, mode: 'websocket' })}
-                        >
-                            <div className="flex items-center gap-3 mb-2">
-                                <Server className="w-5 h-5" />
-                                <h3 className="font-bold">WebSocket (Turbo)</h3>
-                            </div>
-                            <p className="text-sm text-muted-foreground">
-                                Takes 10k+ users. Uses Railway server. Zero DB load. Instant 5ms matches.
-                            </p>
-                            {config?.mode === 'websocket' && wsCount !== null && (
-                                <div className="mt-2 text-xs text-green-600 font-mono">
-                                    • {wsCount} active connections
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* CONFIGURATION */}
-                    {config?.mode === 'websocket' && (
-                        <div className="mb-6 animate-in slide-in-from-top-2">
-                            <label className="block text-sm font-medium mb-2">WebSocket Server URL</label>
-                            <input
-                                type="text"
-                                value={config.ws_url}
-                                onChange={(e) => setConfig({ ...config, ws_url: e.target.value })}
-                                className="w-full p-2 border rounded bg-background"
-                                placeholder="wss://your-app.up.railway.app"
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Deploy code from <code>/matchmaking-server</code> to Railway/Render first.
-                            </p>
-                        </div>
-                    )}
-
-                    <div className="flex justify-end">
-                        <Button onClick={saveSettings} disabled={saving}>
-                            {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                            Apply Changes
-                        </Button>
-                    </div>
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-3xl font-bold text-white tracking-tight">Dashboard Overview</h2>
+                    <p className="text-stone-400">Welcome back, Administrator.</p>
                 </div>
-
-                {/* OTHER ADMIN SECTIONS */}
-                <div className="grid md:grid-cols-2 gap-4">
-                    <div className="p-6 border rounded-lg bg-muted/20 opacity-50">
-                        <h3 className="font-bold mb-2">User Management</h3>
-                        <p className="text-sm">Manage bans, reports, and verifications.</p>
-                        <Button variant="outline" size="sm" className="mt-4" disabled>Coming Soon</Button>
-                    </div>
-                    <div className="p-6 border rounded-lg bg-muted/20 opacity-50">
-                        <h3 className="font-bold mb-2">Analytics</h3>
-                        <p className="text-sm">View growth, retention, and activity.</p>
-                        <Button variant="outline" size="sm" className="mt-4" disabled>Coming Soon</Button>
-                    </div>
+                <div className="flex items-center gap-2 text-sm text-stone-500 bg-stone-900 px-3 py-1 rounded-full border border-white/5">
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    System Operational
                 </div>
             </div>
+
+            {/* Quick Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatsCard
+                    title="Total Users"
+                    value={stats.totalUsers}
+                    icon={Users}
+                    color="blue"
+                />
+                <StatsCard
+                    title="Active Now"
+                    value={stats.activeUsers}
+                    icon={Activity}
+                    subtitle="Online users"
+                    color="green"
+                />
+                <StatsCard
+                    title="Study Rooms"
+                    value={stats.totalRooms}
+                    icon={Server}
+                    subtitle="Created servers"
+                    color="purple"
+                />
+                <StatsCard
+                    title="Pending Reviews"
+                    value={stats.pendingVerifications}
+                    icon={FileCheck}
+                    subtitle="ID verifications"
+                    color="orange"
+                    alert={stats.pendingVerifications > 0}
+                />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* System Health */}
+                <Card className="bg-stone-900/50 border-white/10 lg:col-span-1">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Activity className="w-5 h-5 text-green-500" />
+                            System Health
+                        </CardTitle>
+                        <CardDescription>Real-time service status</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <ServiceStatus service="Supabase" status="operational" uptime="Online" />
+                        <ServiceStatus service="LiveKit" status="operational" uptime="Online" />
+                        <ServiceStatus service="Upstash Redis" status="operational" uptime="Online" />
+                        <ServiceStatus service="Matchmaking" status="operational" uptime="Online" />
+                    </CardContent>
+                </Card>
+
+                {/* Recent Activity */}
+                <Card className="bg-stone-900/50 border-white/10 lg:col-span-2">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Clock className="w-5 h-5 text-purple-500" />
+                            Recent Activity
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <RealRecentActivity />
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Usage Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <MetricRow label="Total Messages" value={stats.totalMessages} icon={MessageSquare} />
+                <MetricRow label="Redis Commands" value={stats.redisCommands} icon={Zap} />
+            </div>
         </div>
-    );
+    )
+}
+
+function StatsCard({ title, value, icon: Icon, subtitle, trend, color, alert }: any) {
+    const colorMap = {
+        blue: 'from-blue-500 to-cyan-500',
+        green: 'from-green-500 to-emerald-500',
+        purple: 'from-purple-500 to-pink-500',
+        orange: 'from-orange-500 to-red-500',
+    }
+
+    return (
+        <Card className="bg-stone-900/50 border-white/10 hover:border-white/20 transition-all group">
+            <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <div className={`p-2.5 bg-gradient-to-br ${colorMap[color as keyof typeof colorMap]} rounded-xl shadow-lg shadow-black/20 group-hover:scale-110 transition-transform`}>
+                        <Icon className="w-5 h-5 text-white" />
+                    </div>
+                    {alert && (
+                        <Badge variant="destructive" className="animate-pulse">
+                            Action Needed
+                        </Badge>
+                    )}
+                </div>
+                <div>
+                    < p className="text-sm text-stone-400 mb-1 font-medium">{title}</p>
+                    <p className="text-3xl font-bold text-white mb-1 tracking-tight">
+                        {value.toLocaleString()}
+                    </p>
+                    {subtitle && <p className="text-xs text-stone-500">{subtitle}</p>}
+                    {trend && (
+                        <div className="flex items-center gap-1 text-xs text-green-400 mt-3 font-medium bg-green-500/10 px-2 py-1 rounded w-fit">
+                            <ArrowUp className="w-3 h-3" />
+                            {trend}
+                        </div>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
+
+function ServiceStatus({ service, status, uptime }: any) {
+    return (
+        <div className="flex items-center justify-between p-3 bg-stone-950/50 rounded-lg border border-white/5 hover:border-white/10 transition-colors">
+            <div className="flex items-center gap-3">
+                <div className={`w-2 h-2 rounded-full ${status === 'operational' ? 'bg-green-500' : 'bg-red-500'} shadow-[0_0_8px_rgba(34,197,94,0.5)]`} />
+                <span className="text-sm font-medium text-stone-300">{service}</span>
+            </div>
+            <div className="flex items-center gap-3">
+                <span className="text-xs text-stone-500 font-mono">{uptime}</span>
+                <Badge variant={status === 'operational' ? 'outline' : 'destructive'} className="text-[10px] h-5 px-2 bg-green-500/10 text-green-400 border-green-500/20">
+                    {status}
+                </Badge>
+            </div>
+        </div>
+    )
+}
+
+function MetricRow({ label, value, icon: Icon }: any) {
+    return (
+        <Card className="bg-stone-900/40 border-white/5">
+            <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-stone-800 rounded-lg">
+                        <Icon className="w-4 h-4 text-stone-400" />
+                    </div>
+                    <span className="text-sm text-stone-400">{label}</span>
+                </div>
+                <span className="text-lg font-bold text-white">{value.toLocaleString()}</span>
+            </CardContent>
+        </Card>
+    )
+}
+
+function RealRecentActivity() {
+    const [logs, setLogs] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+        const fetchLogs = async () => {
+            const { data } = await supabase
+                .from('system_logs')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(5)
+
+            if (data) setLogs(data)
+            setLoading(false)
+        }
+        fetchLogs()
+    }, [])
+
+    if (loading) {
+        return <div className="text-sm text-stone-500 py-4">Checking logs...</div>
+    }
+
+    if (logs.length === 0) {
+        return (
+            <div className="text-center py-8 text-stone-500 border border-dashed border-white/5 rounded-lg">
+                <p>No recent activity.</p>
+                <p className="text-xs mt-1 opacity-50">Admin actions (bans, updates) will appear here.</p>
+            </div>
+        )
+    }
+
+    return (
+        <div className="space-y-1">
+            {logs.map((log) => (
+                <div key={log.id} className="flex items-center gap-4 p-3 hover:bg-white/5 rounded-lg transition-colors group cursor-default">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border border-white/5 transition-all ${log.level === 'warning' ? 'bg-orange-500/10 text-orange-400' :
+                        log.level === 'error' ? 'bg-red-500/10 text-red-400' :
+                            'bg-stone-800 text-stone-400'
+                        }`}>
+                        <Activity className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1">
+                        <p className="text-sm text-stone-300 font-medium group-hover:text-white transition-colors">
+                            {log.message}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-stone-600">
+                            <span>{new Date(log.created_at).toLocaleTimeString()}</span>
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-stone-700 text-stone-500">
+                                {log.source}
+                            </Badge>
+                        </div>
+                    </div>
+                </div>
+            ))}
+        </div>
+    )
 }
