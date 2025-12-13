@@ -222,7 +222,8 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
     const [showServerSettings, setShowServerSettings] = useState(false)
     const [editingChannelId, setEditingChannelId] = useState<string | null>(null)
     const [duration, setDuration] = useState(0)
-    const [participants, setParticipants] = useState<{ sid: string, identity: string }[]>([])
+    // Store participants per channel: { channelName: participants[] }
+    const [channelParticipants, setChannelParticipants] = useState<Record<string, { sid: string, identity: string }[]>>({})
     const [channels, setChannels] = useState<Channel[]>([])
     const [categories, setCategories] = useState<Category[]>([])
     const [events, setEvents] = useState<RoomEvent[]>([])
@@ -249,10 +250,17 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
     const userControlsRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
 
-    const { state, roomName: activeCallRoom, leaveRoom } = useCall()
+    const { state, roomName: activeCallRoom, leaveRoom, joinRoom } = useCall()
     const isConnected = state === 'connected'
 
     const { can, loading: permissionsLoading } = useServerPermissions(roomId, currentUser?.id)
+
+    // Computed channel filters (must be before useEffects that use them)
+    const textChannels = channels.filter(c => c.type === 'text')
+    const voiceChannels = channels.filter(c => c.type === 'voice')
+    const videoChannels = channels.filter(c => c.type === 'video')
+    const canvasChannels = channels.filter(c => c.type === 'canvas')
+    const imageChannels = channels.filter(c => c.type === 'image')
 
     // Fetch functions defined with useCallback so they can be called from modal
     const fetchChannels = useCallback(async () => {
@@ -362,73 +370,112 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
         }
     }, [roomId, fetchChannels, fetchCategories, fetchEvents])
 
-    // Real-time Event-Driven Updates (Zero Polling)
+    // Dynamic Multi-Channel Participant System (Discord-style)
     useEffect(() => {
-        const defaultRoom = `${roomId}-General Lounge`
-        const roomToFetch = activeCallRoom || defaultRoom
+        if (voiceChannels.length === 0) return
 
-        // 1. Initial Fetch
-        const fetchParticipants = async () => {
-            // ... logic same as before ... 
-            // Intentionally duplicating simple fetch to keep it clean or we can extract it.
+        // Fetch participants for a SPECIFIC channel (called on-demand)
+        const fetchChannelParticipants = async (channelName: string) => {
+            const livekitRoom = `${roomId}-${channelName}`
             try {
-                const res = await fetch(`/api/livekit/participants?room=${encodeURIComponent(roomToFetch)}`)
+                const res = await fetch(`/api/livekit/participants?room=${encodeURIComponent(livekitRoom)}`)
                 const data = await res.json()
-                if (Array.isArray(data)) setParticipants(data)
+                if (Array.isArray(data)) {
+                    const uniqueParticipants = Array.from(
+                        new Map(data.map((p: { sid: string, identity: string }) => [p.identity, p])).values()
+                    )
+                    setChannelParticipants(prev => ({
+                        ...prev,
+                        [channelName]: uniqueParticipants
+                    }))
+                }
             } catch (e) {
-                console.error(e)
+                setChannelParticipants(prev => ({
+                    ...prev,
+                    [channelName]: []
+                }))
             }
         }
-        fetchParticipants()
 
-        // 2. Subscribe to WebSocket Updates (instead of polling)
-        // We use the same WS server as matchmaking: ws://localhost:8080 (or production URL)
-        // Note: For now assuming localhost for dev
+        // NO initial fetch - wait for users to actually join
+
+        // WebSocket: Subscribe to ALL voice channels
         const WS_URL = process.env.NEXT_PUBLIC_MATCHMAKING_WS_URL || 'ws://localhost:8080'
-
-        let ws: WebSocket | null = null;
-        let reconnectTimeout: NodeJS.Timeout;
+        let ws: WebSocket | null = null
+        let reconnectTimeout: NodeJS.Timeout
 
         const connect = () => {
             try {
                 ws = new WebSocket(WS_URL)
 
                 ws.onopen = () => {
-                    // Subscribe to this room's updates
-                    ws?.send(JSON.stringify({ type: 'subscribe_room', roomId: roomToFetch }))
+                    voiceChannels.forEach((channel) => {
+                        const livekitRoom = `${roomId}-${channel.name}`
+                        ws?.send(JSON.stringify({
+                            type: 'subscribe_room',
+                            data: { roomId: livekitRoom }
+                        }))
+                    })
                 }
 
                 ws.onmessage = (event) => {
                     try {
-                        const msg = JSON.parse(event.data)
-                        if (msg.type === 'participants_update' && msg.payload.roomName === roomToFetch) {
-                            // The server told us to update!
-                            console.log('⚡ Real-time update received!')
-                            // We can either use the payload (if full list sent) or re-fetch (if empty signal)
-                            // The webhook currently sends empty list to trigger re-fetch (safe/fresh)
-                            fetchParticipants()
+                        const message = JSON.parse(event.data)
+                        if (message.type === 'participants_update' && message.roomName) {
+                            const channelName = message.roomName.replace(`${roomId}-`, '')
+                            fetchChannelParticipants(channelName)
                         }
                     } catch (e) { }
                 }
 
                 ws.onclose = () => {
-                    // Try to reconnect in 5s
-                    reconnectTimeout = setTimeout(connect, 5000)
+                    reconnectTimeout = setTimeout(connect, 3000)
                 }
-            } catch (e) {
-                console.warn('WS Connection failed, falling back to polling')
-                // Fallback to polling if WS fails
-            }
+
+                ws.onerror = () => {
+                    ws?.close()
+                }
+            } catch (e) { }
         }
 
         connect()
 
         return () => {
+            clearTimeout(reconnectTimeout)
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                voiceChannels.forEach((channel) => {
+                    const livekitRoom = `${roomId}-${channel.name}`
+                    ws?.send(JSON.stringify({
+                        type: 'unsubscribe_room',
+                        data: { roomId: livekitRoom }
+                    }))
+                })
+            }
             if (ws) {
                 ws.close()
-                // ws.send(JSON.stringify({ type: 'unsubscribe_room', roomId: roomToFetch }))
             }
-            clearTimeout(reconnectTimeout)
+        }
+    }, [voiceChannels, roomId])
+
+    // Immediate fetch when user joins a channel
+    useEffect(() => {
+        if (activeCallRoom) {
+            // Extract channel name from activeCallRoom (format: roomId-ChannelName)
+            const channelName = activeCallRoom.replace(`${roomId}-`, '')
+            // Fetch immediately so user sees themselves
+            const fetchNow = async () => {
+                try {
+                    const res = await fetch(`/api/livekit/participants?room=${encodeURIComponent(activeCallRoom)}`)
+                    const data = await res.json()
+                    if (Array.isArray(data)) {
+                        setChannelParticipants(prev => ({
+                            ...prev,
+                            [channelName]: data
+                        }))
+                    }
+                } catch (e) { }
+            }
+            fetchNow()
         }
     }, [activeCallRoom, roomId])
 
@@ -684,11 +731,7 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
         fetchEvents()
     }
 
-    const textChannels = channels.filter(c => c.type === 'text')
-    const voiceChannels = channels.filter(c => c.type === 'voice')
-    const videoChannels = channels.filter(c => c.type === 'video')
-    const canvasChannels = channels.filter(c => c.type === 'canvas')
-    const imageChannels = channels.filter(c => c.type === 'image')
+    // (Moved these computed values earlier to fix TS scoping)
 
     // Filter events by status
     const activeEvents = events.filter(e => e.status === 'active')
@@ -764,27 +807,31 @@ export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, is
                 >
                     {/* Discord-style voice channels with nested participants */}
                     {voiceChannels.map((channel) => {
-                        // Show participants to EVERYONE (not just connected users)
-                        const showParticipants = participants.length > 0
+                        // Get participants for THIS specific channel
+                        const channelParts = channelParticipants[channel.name] || []
+                        const showParticipants = channelParts.length > 0
 
                         return (
                             <div key={channel.id}>
                                 {/* Channel Button with Count */}
                                 <ChannelItem
                                     id={channel.id}
-                                    name={`${channel.name}${showParticipants ? ` (${participants.length})` : ''}`}
+                                    name={`${channel.name}${showParticipants ? ` (${channelParts.length})` : ''}`}
                                     type="voice"
                                     active={activeChannel === 'voice'}
-                                    onClick={() => { setActiveChannel('voice'); onSelectChannel('voice') }}
+                                    onClick={() => {
+                                        setActiveChannel('voice');
+                                        onSelectChannel('voice');
+                                    }}
                                     onEdit={can('manage_channels') ? () => setEditingChannelId(channel.id) : undefined}
                                     onDelete={can('manage_channels') ? () => setDeletingChannelId(channel.id) : undefined}
                                     onContextMenu={(e) => handleContextMenu(e, channel.id)}
                                 />
 
-                                {/* Nested Participants (Discord-style with timer) */}
+                                {/* Participants: Show for THIS channel only */}
                                 {showParticipants && (
                                     <div className="ml-6 mt-1 space-y-0.5 pb-2">
-                                        {participants.map((participant) => (
+                                        {channelParts.map((participant: { sid: string, identity: string }) => (
                                             <ParticipantItem
                                                 key={participant.sid}
                                                 participant={participant}

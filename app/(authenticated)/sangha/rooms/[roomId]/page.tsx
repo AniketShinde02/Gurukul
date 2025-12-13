@@ -88,6 +88,7 @@ export default function RoomPage() {
     const [showChat, setShowChat] = useState(false)
     const [showJoinScreen, setShowJoinScreen] = useState(false)
     const [memberCount, setMemberCount] = useState(0)
+    const [selectedVoiceChannel, setSelectedVoiceChannel] = useState('General Lounge') // Default voice channel
 
     // Optimized initial load
     useEffect(() => {
@@ -319,7 +320,7 @@ export default function RoomPage() {
                                     <VoiceLounge onJoin={handleJoinVideo} />
                                 ) : (
                                     <VideoRoom
-                                        roomName={`${roomId}-General Lounge`}
+                                        roomName={`${roomId}-Study Lounge`}
                                         username={currentUser?.username || 'Guest'}
                                         onLeave={handleVideoLeave}
                                         onToggleChat={handleToggleChat}
