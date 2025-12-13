@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimit } from '@/lib/redis'
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,6 +10,12 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // ✅ Rate limit: 5 join attempts per minute (prevent spam matching)
+    const { allowed } = await rateLimit(user.id, 'matching-join', 5, 60)
+    if (!allowed) {
+      return NextResponse.json({ error: 'Too many attempts. Please wait.' }, { status: 429 })
     }
 
     // ✅ (Removed blocking check - we now clear stale entries instead)

@@ -37,8 +37,8 @@
 - [ ] 🟠 Add IndexedDB for offline support - TODO: Future enhancement
 
 ### Security
-- [ ] 🟠 Add rate limiting to all API routes
-- [ ] 🟠 Implement request throttling
+- [x] ✅ Add rate limiting to all API routes - DONE: LiveKit token, Matching join
+- [ ] 🟠 Implement request throttling (advanced - use Vercel Edge Config if needed)
 - [ ] 🟠 Add CSRF protection
 - [ ] 🟠 Implement API key rotation
 
