@@ -1,120 +1,68 @@
-        -- Discord-Style Role Badge System Migration
-        -- Date: December 12, 2025
+-- Add icon column to room_roles table
+ALTER TABLE room_roles 
+ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT NULL;
 
-        -- 1. Add icon column to room_roles
-        ALTER TABLE room_roles 
-        ADD COLUMN IF NOT EXISTS icon TEXT DEFAULT NULL;
+-- icon can be:
+-- - Emoji (e.g., "🛡️", "👑", "🔨")
+-- - Icon name (e.g., "shield", "crown", "hammer")
+-- - URL to custom icon image
 
-        -- icon can be:
-        -- - Emoji (e.g., "🛡️", "👑", "🔨")
-        -- - Icon name (e.g., "shield", "crown", "hammer")  
-        -- - URL to custom icon image
+COMMENT ON COLUMN room_roles.icon IS 'Role icon: emoji, icon name, or image URL';
 
-        -- 2. Create room_user_roles junction table (for multiple roles per user)
-        CREATE TABLE IF NOT EXISTS room_user_roles (
-        id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-        room_id UUID REFERENCES study_rooms(id) ON DELETE CASCADE,
-        user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-        role_id UUID REFERENCES room_roles(id) ON DELETE CASCADE,
-        assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        assigned_by UUID REFERENCES profiles(id),
-        UNIQUE(room_id, user_id, role_id)
-        );
+-- Create junction table for multi-role support (users can have multiple roles)
+CREATE TABLE IF NOT EXISTS room_user_roles (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  room_id UUID REFERENCES study_rooms(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  role_id UUID REFERENCES room_roles(id) ON DELETE CASCADE NOT NULL,
+  assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  assigned_by UUID REFERENCES profiles(id),
+  UNIQUE(room_id, user_id, role_id)
+);
 
-        -- 3. Create indexes for performance
-        CREATE INDEX IF NOT EXISTS idx_room_user_roles_room 
-        ON room_user_roles(room_id);
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_room_user_roles_room ON room_user_roles(room_id);
+CREATE INDEX IF NOT EXISTS idx_room_user_roles_user ON room_user_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_room_user_roles_role ON room_user_roles(role_id);
 
-        CREATE INDEX IF NOT EXISTS idx_room_user_roles_user 
-        ON room_user_roles(user_id);
+-- Enable RLS
+ALTER TABLE room_user_roles ENABLE ROW LEVEL SECURITY;
 
-        CREATE INDEX IF NOT EXISTS idx_room_user_roles_role 
-        ON room_user_roles(role_id);
+-- Policy: Members can view user roles in their rooms
+CREATE POLICY "User roles visible to room members"
+ON room_user_roles FOR SELECT 
+USING (
+  EXISTS (
+    SELECT 1 FROM room_participants 
+    WHERE room_id = room_user_roles.room_id 
+    AND user_id = auth.uid()
+  )
+);
 
-        -- 4. Enable RLS
-        ALTER TABLE room_user_roles ENABLE ROW LEVEL SECURITY;
+-- Policy: Admins can manage user roles
+CREATE POLICY "Admins can manage user roles"
+ON room_user_roles FOR ALL 
+USING (
+  EXISTS (
+    SELECT 1 FROM room_participants rp
+    JOIN room_roles r ON rp.role_id = r.id
+    WHERE rp.room_id = room_user_roles.room_id 
+    AND rp.user_id = auth.uid()
+    AND (r.permissions->>'manage_roles')::boolean = true
+  )
+);
 
-        -- 5. Drop existing policies if they exist
-        DROP POLICY IF EXISTS "User roles are viewable by members" ON room_user_roles;
-        DROP POLICY IF EXISTS "Admins can manage user roles" ON room_user_roles;
+-- Add default icons to existing roles
+UPDATE room_roles 
+SET icon = 'shield'
+WHERE name = 'Admin' AND icon IS NULL;
 
-        -- 6. Create RLS policies
-        CREATE POLICY "User roles are viewable by members"
-        ON room_user_roles FOR SELECT 
-        USING (
-        EXISTS (
-            SELECT 1 FROM room_participants 
-            WHERE room_id = room_user_roles.room_id 
-            AND user_id = auth.uid()
-        )
-        );
+UPDATE room_roles 
+SET icon = 'hammer'
+WHERE name ILIKE '%mod%' AND icon IS NULL;
 
-        CREATE POLICY "Admins can manage user roles"
-        ON room_user_roles FOR ALL 
-        USING (
-        EXISTS (
-            SELECT 1 FROM room_participants rp
-            JOIN room_roles r ON rp.role_id = r.id
-            WHERE rp.room_id = room_user_roles.room_id 
-            AND rp.user_id = auth.uid()
-            AND (r.permissions->>'manage_roles')::boolean = true
-        )
-        )
-        WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM room_participants rp
-            JOIN room_roles r ON rp.role_id = r.id
-            WHERE rp.room_id = room_user_roles.room_id 
-            AND rp.user_id = auth.uid()
-            AND (r.permissions->>'manage_roles')::boolean = true
-        )
-        );
+UPDATE room_roles 
+SET icon = 'user'
+WHERE name = 'Member' AND icon IS NULL;
 
-        -- 7. Migrate existing single-role assignments to junction table
-        INSERT INTO room_user_roles (room_id, user_id, role_id, assigned_at)
-        SELECT 
-        rp.room_id,
-        rp.user_id,
-        rp.role_id,
-        NOW()
-        FROM room_participants rp
-        WHERE rp.role_id IS NOT NULL
-        ON CONFLICT (room_id, user_id, role_id) DO NOTHING;
-
-        -- 8. Add default icons to existing roles
-        UPDATE room_roles 
-        SET icon = 'shield'
-        WHERE name ILIKE '%admin%' AND icon IS NULL;
-
-        UPDATE room_roles 
-        SET icon = 'hammer'
-        WHERE name ILIKE '%mod%' AND icon IS NULL;
-
-        UPDATE room_roles 
-        SET icon = NULL
-        WHERE name ILIKE '%member%' AND icon IS NULL;
-
-        -- 9. Add realtime subscription
-        DO $$
-        BEGIN
-        IF NOT EXISTS (
-            SELECT 1 FROM pg_publication_tables 
-            WHERE pubname = 'supabase_realtime' 
-            AND tablename = 'room_user_roles'
-        ) THEN
-            ALTER PUBLICATION supabase_realtime ADD TABLE room_user_roles;
-        END IF;
-        END $$;
-
-        -- 10. Grant necessary permissions
-        GRANT SELECT ON room_user_roles TO authenticated;
-        GRANT INSERT, UPDATE, DELETE ON room_user_roles TO authenticated;
-
-        -- Verification query (run manually to test):
-        -- SELECT 
-        --   rr.name as role_name,
-        --   rr.icon,
-        --   COUNT(*) as user_count
-        -- FROM room_user_roles rur
-        -- JOIN room_roles rr ON rur.role_id = rr.id
-        -- GROUP BY rr.id, rr.name, rr.icon;
+-- Migration complete!
