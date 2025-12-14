@@ -21,7 +21,7 @@ export type DmMessage = {
     conversation_id: string
     sender_id: string
     content: string
-    type: 'text' | 'image' | 'file' | 'system' | 'gif'
+    type: 'text' | 'image' | 'file' | 'system' | 'gif' | 'voice'
     is_read: boolean
     is_deleted?: boolean
     created_at: string
@@ -238,7 +238,7 @@ export function useDm() {
 
     const sendMessage = async (
         content: string,
-        type: 'text' | 'image' | 'file' | 'gif' = 'text',
+        type: 'text' | 'image' | 'file' | 'gif' | 'voice' = 'text',
         metadata?: { fileName?: string, fileSize?: number, fileType?: string }
     ) => {
         if (!activeConversationId || !content.trim() || !currentUserId) return

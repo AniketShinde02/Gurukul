@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react
 import { useDm } from '@/hooks/useDm'
 import { useSound } from '@/hooks/useSound'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Phone, Video, Info, PlusCircle, Smile, Gift, Sticker, Trash2, MoreVertical, X, Image as ImageIcon, FileText, Paperclip, Copy, Search, Pin, Loader2 } from 'lucide-react'
+import { Info, PlusCircle, Smile, Gift, Sticker, Trash2, MoreVertical, X, Image as ImageIcon, FileText, Paperclip, Copy, Search, Pin, Loader2, Mic } from 'lucide-react'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Linkify } from '@/components/ui/linkify'
 import { supabase } from '@/lib/supabase/client'
+import { VoiceMessagePlayer } from '@/components/VoiceMessagePlayer'
 
 export function ChatArea({ conversationId, onClose }: { conversationId: string, onClose?: () => void }) {
     const {
@@ -44,13 +45,20 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
     const [previewImage, setPreviewImage] = useState<string | null>(null)
     const [showSearch, setShowSearch] = useState(false)
     const [searchTerm, setSearchTerm] = useState('')
+    const [searchResults, setSearchResults] = useState<any[]>([])
+    const [isSearching, setIsSearching] = useState(false)
 
-    const filteredMessages = searchTerm
-        ? messages.filter(m => m.content.toLowerCase().includes(searchTerm.toLowerCase()))
-        : messages
+    // Use search results if searching, otherwise show normal messages
+    const filteredMessages = searchResults.length > 0 ? searchResults : messages
 
     const [showPinnedMessages, setShowPinnedMessages] = useState(false)
     const [pinnedMessages, setPinnedMessages] = useState<any[]>([])
+    const [isRecording, setIsRecording] = useState(false)
+    const [recordingDuration, setRecordingDuration] = useState(0)
+    const [isUploadingVoice, setIsUploadingVoice] = useState(false)
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+    const audioChunksRef = useRef<Blob[]>([])
+    const recordingTimerRef = useRef<NodeJS.Timeout | null>(null)
     const [loadingPins, setLoadingPins] = useState(false)
 
     const scrollRef = useRef<HTMLDivElement>(null)
@@ -95,6 +103,107 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
     const handleCopyText = (text: string) => {
         navigator.clipboard.writeText(text)
         toast.success('Text copied')
+    }
+
+    // Start voice recording
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+            const mediaRecorder = new MediaRecorder(stream)
+
+            mediaRecorderRef.current = mediaRecorder
+            audioChunksRef.current = []
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data)
+                }
+            }
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
+                await uploadVoiceMessage(audioBlob)
+                stream.getTracks().forEach(track => track.stop())
+            }
+
+            mediaRecorder.start()
+            setIsRecording(true)
+            setRecordingDuration(0)
+
+            // Start timer
+            recordingTimerRef.current = setInterval(() => {
+                setRecordingDuration(prev => prev + 1)
+            }, 1000)
+
+            toast.success('Recording started')
+        } catch (error) {
+            console.error('Recording error:', error)
+            toast.error('Failed to access microphone')
+        }
+    }
+
+    // Stop voice recording
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop()
+            setIsRecording(false)
+            if (recordingTimerRef.current) {
+                clearInterval(recordingTimerRef.current)
+            }
+        }
+    }
+
+    // Cancel recording
+    const cancelRecording = () => {
+        if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.stop()
+            if (mediaRecorderRef.current.stream) {
+                mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
+            }
+        }
+        setIsRecording(false)
+        setRecordingDuration(0)
+        if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current)
+        }
+        audioChunksRef.current = []
+        toast.success('Recording cancelled')
+    }
+
+    // Upload voice message
+    const uploadVoiceMessage = async (audioBlob: Blob) => {
+        setIsUploadingVoice(true)
+        try {
+            const timestamp = Date.now()
+            const filename = `voice_${timestamp}.webm`
+            const filepath = `${conversationId}/${filename}`
+
+            // Upload to Supabase Storage
+            const { error: uploadError } = await supabase.storage
+                .from('voice-messages')
+                .upload(filepath, audioBlob, {
+                    contentType: 'audio/webm',
+                    cacheControl: '3600'
+                })
+
+            if (uploadError) throw uploadError
+
+            // Get public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('voice-messages')
+                .getPublicUrl(filepath)
+
+            // Send message
+            await sendMessage(publicUrl, 'voice')
+
+            toast.success('Voice message sent!')
+        } catch (error: any) {
+            console.error('Upload error:', error)
+            toast.error(error.message || 'Failed to send voice message')
+        } finally {
+            setIsUploadingVoice(false)
+            setRecordingDuration(0)
+        }
     }
 
     // Fetch pinned DM messages
@@ -164,6 +273,47 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
             toast.error('Failed to unpin message')
         }
     }
+
+    // Full-text search handler
+    const handleSearch = useCallback(async (query: string) => {
+        if (!query.trim()) {
+            setSearchResults([])
+            setIsSearching(false)
+            return
+        }
+
+        setIsSearching(true)
+        try {
+            const response = await fetch(
+                `/api/search?q=${encodeURIComponent(query)}&type=dm&id=${conversationId}&limit=50`
+            )
+
+            if (!response.ok) throw new Error('Search failed')
+
+            const data = await response.json()
+            setSearchResults(data.results || [])
+        } catch (error) {
+            console.error('Search error:', error)
+            toast.error('Search failed')
+            setSearchResults([])
+        } finally {
+            setIsSearching(false)
+        }
+    }, [conversationId])
+
+    // Debounced search
+    useEffect(() => {
+        if (!searchTerm) {
+            setSearchResults([])
+            return
+        }
+
+        const timer = setTimeout(() => {
+            handleSearch(searchTerm)
+        }, 500) // 500ms debounce
+
+        return () => clearTimeout(timer)
+    }, [searchTerm, handleSearch])
 
     // Sync active ID
     useEffect(() => {
@@ -445,7 +595,11 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
                             placeholder="Search in conversation..."
                             className="w-full bg-transparent border-none py-3 pl-10 pr-4 text-sm text-white placeholder:text-stone-500 focus:outline-none"
                         />
-                        {searchTerm && (
+                        {isSearching ? (
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                <Loader2 className="w-4 h-4 text-orange-500 animate-spin" />
+                            </div>
+                        ) : searchTerm && (
                             <button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-stone-500 hover:text-white">
                                 <X className="w-4 h-4" />
                             </button>
@@ -588,6 +742,13 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
                                                                                 <p className="text-xs text-stone-500">{msg.file_size ? `${(msg.file_size / 1024).toFixed(1)} KB` : 'File'}</p>
                                                                             </div>
                                                                         </a>
+                                                                    ) : msg.type === 'voice' ? (
+                                                                        <VoiceMessagePlayer
+                                                                            audioUrl={msg.content}
+                                                                            duration={60} // Default, will be replaced with actual
+                                                                            waveform={[]}
+                                                                            isMe={isMe}
+                                                                        />
                                                                     ) : (
                                                                         <p className="whitespace-pre-wrap leading-relaxed">
                                                                             <Linkify text={msg.content} />
@@ -661,15 +822,15 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
                                                 {/* Reactions Display */}
                                                 {msg.dm_reactions && msg.dm_reactions.length > 0 && (
                                                     <div className={`mt-1 flex flex-wrap gap-1.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                                                        {Object.entries(msg.dm_reactions.reduce((acc: any, r) => {
+                                                        {(Object.entries(msg.dm_reactions.reduce((acc: Record<string, number>, r: { emoji: string; user_id: string }) => {
                                                             acc[r.emoji] = (acc[r.emoji] || 0) + 1
                                                             return acc
-                                                        }, {})).map(([emoji, count]: any) => (
+                                                        }, {} as Record<string, number>)) as [string, number][]).map(([emoji, count]) => (
                                                             <button
                                                                 key={emoji}
                                                                 onClick={() => addReaction(msg.id, emoji)}
                                                                 className={`text-[10px] px-1.5 py-0.5 rounded-full border transition-colors flex items-center gap-1
-                                                                    ${msg.dm_reactions?.some(r => r.user_id === currentUserId && r.emoji === emoji)
+                                                                    ${msg.dm_reactions?.some((r: { emoji: string; user_id: string }) => r.user_id === currentUserId && r.emoji === emoji)
                                                                         ? 'bg-orange-500/20 border-orange-500/30 text-orange-200 hover:bg-orange-500/30'
                                                                         : 'bg-stone-800 border-white/5 text-stone-300 hover:bg-stone-700'}`}
                                                             >
@@ -813,8 +974,51 @@ export function ChatArea({ conversationId, onClose }: { conversationId: string, 
                         >
                             <Smile className="w-5 h-5" />
                         </button>
+
+                        {/* Voice Message Button - Shows recording state */}
+                        {!isRecording ? (
+                            <button
+                                onClick={startRecording}
+                                disabled={isUploadingVoice}
+                                className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/5 text-stone-400 hover:text-white disabled:opacity-50"
+                                title="Record Voice Message"
+                            >
+                                <Mic className="w-5 h-5" />
+                            </button>
+                        ) : (
+                            <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 rounded-full border border-red-500/30">
+                                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                                <span className="text-xs font-mono text-white">
+                                    {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, '0')}
+                                </span>
+                                <button
+                                    onClick={stopRecording}
+                                    className="w-7 h-7 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center transition-colors"
+                                    title="Send"
+                                >
+                                    <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={cancelRecording}
+                                    className="w-7 h-7 rounded-full bg-stone-700 hover:bg-stone-600 flex items-center justify-center transition-colors"
+                                    title="Cancel"
+                                >
+                                    <X className="w-4 h-4 text-white" />
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
+
+                {/* Uploading Voice Indicator */}
+                {isUploadingVoice && (
+                    <div className="mt-2 flex items-center gap-2 text-sm text-stone-400">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Sending voice message...</span>
+                    </div>
+                )}
             </div>
         </div>
     )

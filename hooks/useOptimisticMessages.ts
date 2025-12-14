@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast'
 type SendMessageVariables = {
     content: string
     userId: string
-    type?: 'text' | 'image' | 'gif' | 'file'
+    type?: 'text' | 'image' | 'gif' | 'file' | 'voice'
     fileUrl?: string
     parentId?: string
     senderProfile?: { // Optional profile to make optimistic UI look good

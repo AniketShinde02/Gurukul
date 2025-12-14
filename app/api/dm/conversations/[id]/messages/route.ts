@@ -134,6 +134,7 @@ export async function POST(
         if (type === 'image') preview = 'Sent an image'
         else if (type === 'file') preview = 'Sent a file'
         else if (type === 'gif') preview = 'Sent a GIF'
+        else if (type === 'voice') preview = '🎤 Voice message'
 
         // Get conversation to check which user is sending
         const { data: conversation } = await supabase

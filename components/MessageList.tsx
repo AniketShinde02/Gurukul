@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from 'react'
 import { RoomMessage, useMessages } from '@/hooks/useMessages'
 import { Loader2, Reply, Copy, Edit2, Trash2, Image as ImageIcon, File as FileIcon, Pin } from 'lucide-react'
+import { VoiceMessagePlayer } from '@/components/VoiceMessagePlayer'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Linkify } from '@/components/ui/linkify'
 import { format } from 'date-fns'
@@ -110,6 +111,13 @@ const MessageRow = React.memo(({ index, style, data }: {
                                             <p className="text-xs text-stone-500">Click to download</p>
                                         </div>
                                     </a>
+                                ) : msg.type === 'voice' ? (
+                                    <VoiceMessagePlayer
+                                        audioUrl={msg.file_url || msg.content}
+                                        duration={60}
+                                        waveform={[]}
+                                        isMe={isMe}
+                                    />
                                 ) : (
                                     <div className="whitespace-pre-wrap leading-relaxed min-w-[20px]">
                                         <Linkify text={msg.content} />

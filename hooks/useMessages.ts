@@ -7,7 +7,7 @@ export type RoomMessage = {
     content: string
     created_at: string
     sender_id: string
-    type: 'text' | 'image' | 'gif' | 'file' | 'system'
+    type: 'text' | 'image' | 'gif' | 'file' | 'system' | 'voice'
     file_url?: string
     parent_id?: string | null
     is_edited?: boolean

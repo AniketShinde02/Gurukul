@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { PlusCircle, Gift, Sticker, Smile, Hash, Bell, Pin, Users, Trash2, Crown, Shield, File as FileIcon, Loader2, Reply, Edit2, X, Image as ImageIcon, FileText, Copy, MoreVertical } from 'lucide-react'
+import { PlusCircle, Gift, Sticker, Smile, Hash, Bell, Pin, Users, Trash2, Crown, Shield, File as FileIcon, Loader2, Reply, Edit2, X, Image as ImageIcon, FileText, Copy, MoreVertical, Mic } from 'lucide-react'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toast } from 'react-hot-toast'
@@ -19,6 +19,8 @@ import { useOptimisticMessages } from '@/hooks/useOptimisticMessages'
 import { MessageList } from '@/components/MessageList'
 import { RoomMessage } from '@/hooks/useMessages'
 import { useTypingIndicator, TypingIndicator } from '@/hooks/useTypingIndicator'
+import { VoiceRecorder } from '@/components/VoiceRecorder'
+import { VoiceMessagePlayer } from '@/components/VoiceMessagePlayer'
 
 export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: string, roomName: string, isSidebar?: boolean }) {
     const [newMessage, setNewMessage] = useState('')
@@ -33,6 +35,7 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
     const [showPinnedMessages, setShowPinnedMessages] = useState(false)
     const [pinnedMessages, setPinnedMessages] = useState<any[]>([])
     const [loadingPins, setLoadingPins] = useState(false)
+    const [showVoiceRecorder, setShowVoiceRecorder] = useState(false)
 
     const emojiPickerRef = useRef<HTMLDivElement>(null)
     const gifPickerRef = useRef<HTMLDivElement>(null)
@@ -128,6 +131,32 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
             setPinnedMessages(prev => prev.filter(p => p.id !== pinId))
         } catch (error) {
             toast.error('Failed to unpin message')
+        }
+    }
+
+    // Send voice message
+    const handleVoiceSend = async (audioUrl: string, duration: number, waveform: number[]) => {
+        if (!currentUserId || !currentUser) return
+
+        try {
+            // Send message with type='voice'
+            sendMessage({
+                content: audioUrl,
+                userId: currentUserId,
+                type: 'voice',
+                fileUrl: audioUrl,
+                senderProfile: {
+                    username: currentUser.username || 'You',
+                    full_name: currentUser.full_name || null,
+                    avatar_url: currentUser.avatar_url || null
+                }
+            })
+
+            setShowVoiceRecorder(false)
+            toast.success('Voice message sent!')
+        } catch (error) {
+            console.error('Failed to send voice message:', error)
+            toast.error('Failed to send voice message')
         }
     }
 
@@ -541,8 +570,27 @@ export function RoomChatArea({ roomId, roomName, isSidebar = false }: { roomId: 
                             >
                                 <Smile className="w-5 h-5" />
                             </button>
+
+                            {/* Voice Message Button */}
+                            <button
+                                onClick={() => setShowVoiceRecorder(!showVoiceRecorder)}
+                                className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:bg-white/5 ${showVoiceRecorder ? 'text-orange-500' : 'text-stone-400 hover:text-white'}`}
+                                title="Send Voice Message"
+                            >
+                                <Mic className="w-5 h-5" />
+                            </button>
                         </div>
                     </div>
+
+                    {/* Voice Recorder */}
+                    {showVoiceRecorder && (
+                        <div className="mt-3 px-6">
+                            <VoiceRecorder
+                                onSend={handleVoiceSend}
+                                onCancel={() => setShowVoiceRecorder(false)}
+                            />
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div className="px-6 pb-6 pt-2 text-center text-stone-500 text-sm">

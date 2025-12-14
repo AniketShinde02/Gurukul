@@ -1,802 +1,802 @@
-'use client'
+    'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { cn } from '@/lib/utils'
-import { PomodoroTimer } from './PomodoroTimer'
-import { LoFiPlayer } from './LoFiPlayer'
-import { Hash, Volume2, Settings, ChevronDown, Presentation, Signal, PhoneOff, Mic, MicOff, Video, VideoOff, Sliders, Plus, Trash2, Edit2, Shield, Users, LogOut, Image as ImageIcon, MonitorPlay, Radio } from 'lucide-react'
+    import { useState, useEffect, useRef, useCallback } from 'react'
+    import { cn } from '@/lib/utils'
+    import { PomodoroTimer } from './PomodoroTimer'
+    import { LoFiPlayer } from './LoFiPlayer'
+    import { Hash, Volume2, Settings, ChevronDown, Presentation, Signal, PhoneOff, Mic, MicOff, Video, VideoOff, Sliders, Plus, Trash2, Edit2, Shield, Users, LogOut, Image as ImageIcon, MonitorPlay, Radio } from 'lucide-react'
 
-// ... (existing imports)
+    // ... (existing imports)
 
-// ... (inside component)
-
-
-import Link from 'next/link'
-import { UserProfilePopup } from './UserProfilePopup'
-import { EventCard } from './EventCard'
-import { useCall } from './GlobalCallManager'
-import { supabase } from '@/lib/supabase/client'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-    ContextMenu,
-    ContextMenuContent,
-    ContextMenuItem,
-    ContextMenuSeparator,
-    ContextMenuTrigger,
-} from "@/components/ui/context-menu"
-import { Check, Copy, Bell, VolumeX } from 'lucide-react'
-
-// ... RoomSidebar component start
+    // ... (inside component)
 
 
+    import Link from 'next/link'
+    import { UserProfilePopup } from './UserProfilePopup'
+    import { EventCard } from './EventCard'
+    import { useCall } from './GlobalCallManager'
+    import { supabase } from '@/lib/supabase/client'
+    import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+    import {
+        DropdownMenu,
+        DropdownMenuContent,
+        DropdownMenuItem,
+        DropdownMenuLabel,
+        DropdownMenuSeparator,
+        DropdownMenuTrigger,
+    } from "@/components/ui/dropdown-menu"
+    import {
+        Dialog,
+        DialogContent,
+        DialogDescription,
+        DialogFooter,
+        DialogHeader,
+        DialogTitle,
+        DialogTrigger,
+    } from "@/components/ui/dialog"
+    import {
+        ContextMenu,
+        ContextMenuContent,
+        ContextMenuItem,
+        ContextMenuSeparator,
+        ContextMenuTrigger,
+    } from "@/components/ui/context-menu"
+    import { Check, Copy, Bell, VolumeX } from 'lucide-react'
 
-// ...
+    // ... RoomSidebar component start
 
-type ChannelGroupProps = {
-    title: string
-    channels: Channel[]
-    type: 'text' | 'voice' | 'canvas' | 'video' | 'image'
-    activeChannel: string
-    onSelect: (type: any) => void
-    onSelectGlobal: (type: any) => void
-    canManage: boolean
-    onCreate: () => void
-    onEdit: (id: string) => void
-    onDelete: (id: string) => void
-    onContextMenu: (e: React.MouseEvent, channelId: string) => void
-    children?: React.ReactNode
-}
 
-function ChannelGroup({ title, channels, type, activeChannel, onSelect, onSelectGlobal, canManage, onCreate, onEdit, onDelete, onContextMenu, children }: ChannelGroupProps) {
-    if (channels.length === 0 && !canManage && type !== 'text') return null
 
-    return (
-        <div>
-            <div className="flex items-center justify-between px-2 mb-1 text-xs font-bold text-stone-500 uppercase hover:text-stone-400 cursor-pointer group tracking-wider">
-                <div className="flex items-center gap-0.5">
-                    <ChevronDown className="w-3 h-3" />
-                    <span>{title}</span>
+    // ...
+
+    type ChannelGroupProps = {
+        title: string
+        channels: Channel[]
+        type: 'text' | 'voice' | 'canvas' | 'video' | 'image'
+        activeChannel: string
+        onSelect: (type: any) => void
+        onSelectGlobal: (type: any) => void
+        canManage: boolean
+        onCreate: () => void
+        onEdit: (id: string) => void
+        onDelete: (id: string) => void
+        onContextMenu: (e: React.MouseEvent, channelId: string) => void
+        children?: React.ReactNode
+    }
+
+    function ChannelGroup({ title, channels, type, activeChannel, onSelect, onSelectGlobal, canManage, onCreate, onEdit, onDelete, onContextMenu, children }: ChannelGroupProps) {
+        if (channels.length === 0 && !canManage && type !== 'text') return null
+
+        return (
+            <div>
+                <div className="flex items-center justify-between px-2 mb-1 text-xs font-bold text-stone-500 uppercase hover:text-stone-400 cursor-pointer group tracking-wider">
+                    <div className="flex items-center gap-0.5">
+                        <ChevronDown className="w-3 h-3" />
+                        <span>{title}</span>
+                    </div>
+                    {canManage && (
+                        <button onClick={onCreate} className="opacity-0 group-hover:opacity-100 hover:text-white transition-opacity">
+                            <Plus className="w-3 h-3" />
+                        </button>
+                    )}
                 </div>
-                {canManage && (
-                    <button onClick={onCreate} className="opacity-0 group-hover:opacity-100 hover:text-white transition-opacity">
-                        <Plus className="w-3 h-3" />
+                <div className="space-y-[2px]">
+                    {/* Render children if provided (for custom voice channel rendering) */}
+                    {children ? children : (
+                        <>
+                            {channels.map((channel) => (
+                                <ChannelItem
+                                    key={channel.id}
+                                    id={channel.id}
+                                    name={channel.name}
+                                    type={type}
+                                    active={activeChannel === type && false}
+                                    onClick={() => { onSelect(type); onSelectGlobal(type) }}
+                                    onEdit={canManage ? () => onEdit(channel.id) : undefined}
+                                    onDelete={canManage ? () => onDelete(channel.id) : undefined}
+                                    onContextMenu={(e) => onContextMenu(e, channel.id)}
+                                />
+                            ))}
+                            {channels.length === 0 && <div className="px-2 text-[10px] text-stone-600 italic">No channels</div>}
+                        </>
+                    )}
+                </div>
+            </div>
+        )
+    }
+
+    function ChannelItem({ id, name, type, active, onClick, onEdit, onDelete, onContextMenu }: { id: string, name: string, type: 'text' | 'voice' | 'canvas' | 'video' | 'image', active: boolean, onClick: () => void, onEdit?: () => void, onDelete?: () => void, onContextMenu: (e: React.MouseEvent) => void }) {
+        return (
+            <div className="group relative flex items-center" onContextMenu={onContextMenu}>
+                <button
+                    onClick={onClick}
+                    className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all ${active
+                        ? 'bg-stone-800 text-white shadow-sm border border-white/5'
+                        : 'text-stone-400 hover:bg-stone-800/50 hover:text-stone-200'
+                        }`}
+                >
+                    {type === 'text' && <Hash className="w-4 h-4 text-stone-500" />}
+                    {type === 'voice' && <Volume2 className="w-4 h-4 text-stone-500" />}
+                    {type === 'video' && <MonitorPlay className="w-4 h-4 text-stone-500" />}
+                    {type === 'canvas' && <Presentation className="w-4 h-4 text-stone-500" />}
+                    {type === 'image' && <ImageIcon className="w-4 h-4 text-stone-500" />}
+                    <span className={`font-medium truncate text-sm ${active ? 'text-white' : ''}`}>{name}</span>
+                </button>
+                {onEdit && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onEdit() }}
+                        className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 text-stone-500 hover:text-white transition-all"
+                    >
+                        <Settings className="w-3 h-3" />
                     </button>
                 )}
             </div>
-            <div className="space-y-[2px]">
-                {/* Render children if provided (for custom voice channel rendering) */}
-                {children ? children : (
-                    <>
-                        {channels.map((channel) => (
-                            <ChannelItem
-                                key={channel.id}
-                                id={channel.id}
-                                name={channel.name}
-                                type={type}
-                                active={activeChannel === type && false}
-                                onClick={() => { onSelect(type); onSelectGlobal(type) }}
-                                onEdit={canManage ? () => onEdit(channel.id) : undefined}
-                                onDelete={canManage ? () => onDelete(channel.id) : undefined}
-                                onContextMenu={(e) => onContextMenu(e, channel.id)}
-                            />
-                        ))}
-                        {channels.length === 0 && <div className="px-2 text-[10px] text-stone-600 italic">No channels</div>}
-                    </>
-                )}
-            </div>
-        </div>
-    )
-}
+        )
+    }
+    import { Input } from '@/components/ui/input'
+    import { Button } from '@/components/ui/button'
+    import { Label } from '@/components/ui/label'
+    import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+    import { toast } from 'react-hot-toast'
+    import { useRouter } from 'next/navigation'
+    import { ServerSettingsModal } from './ServerSettingsModal'
+    import { ChannelSettingsModal } from './ChannelSettingsModal'
+    import { UnifiedCreationModal } from './UnifiedCreationModal'
+    import { useServerPermissions } from '@/hooks/useServerPermissions'
 
-function ChannelItem({ id, name, type, active, onClick, onEdit, onDelete, onContextMenu }: { id: string, name: string, type: 'text' | 'voice' | 'canvas' | 'video' | 'image', active: boolean, onClick: () => void, onEdit?: () => void, onDelete?: () => void, onContextMenu: (e: React.MouseEvent) => void }) {
-    return (
-        <div className="group relative flex items-center" onContextMenu={onContextMenu}>
-            <button
-                onClick={onClick}
-                className={`w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-all ${active
-                    ? 'bg-stone-800 text-white shadow-sm border border-white/5'
-                    : 'text-stone-400 hover:bg-stone-800/50 hover:text-stone-200'
-                    }`}
-            >
-                {type === 'text' && <Hash className="w-4 h-4 text-stone-500" />}
-                {type === 'voice' && <Volume2 className="w-4 h-4 text-stone-500" />}
-                {type === 'video' && <MonitorPlay className="w-4 h-4 text-stone-500" />}
-                {type === 'canvas' && <Presentation className="w-4 h-4 text-stone-500" />}
-                {type === 'image' && <ImageIcon className="w-4 h-4 text-stone-500" />}
-                <span className={`font-medium truncate text-sm ${active ? 'text-white' : ''}`}>{name}</span>
-            </button>
-            {onEdit && (
-                <button
-                    onClick={(e) => { e.stopPropagation(); onEdit() }}
-                    className="absolute right-1 opacity-0 group-hover:opacity-100 p-1 text-stone-500 hover:text-white transition-all"
-                >
-                    <Settings className="w-3 h-3" />
-                </button>
-            )}
-        </div>
-    )
-}
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { toast } from 'react-hot-toast'
-import { useRouter } from 'next/navigation'
-import { ServerSettingsModal } from './ServerSettingsModal'
-import { ChannelSettingsModal } from './ChannelSettingsModal'
-import { UnifiedCreationModal } from './UnifiedCreationModal'
-import { useServerPermissions } from '@/hooks/useServerPermissions'
-
-type Channel = {
-    id: string
-    name: string
-    type: 'text' | 'voice' | 'canvas' | 'video' | 'image'
-    position: number
-    category_id?: string | null
-    description?: string | null
-    is_private?: boolean
-}
-
-type Category = {
-    id: string
-    name: string
-    position: number
-}
-
-type RoomEvent = {
-    id: string
-    name: string
-    description?: string | null
-    start_time: string
-    end_time?: string | null
-    channel_id?: string | null
-    status?: 'upcoming' | 'active' | 'past'
-    participant_count?: number
-}
-
-// Participant Item with Timer (Discord-style)
-function ParticipantItem({ participant }: { participant: { sid: string, identity: string } }) {
-    const [duration, setDuration] = useState(0)
-
-    useEffect(() => {
-        // Start timer when participant mounts
-        const interval = setInterval(() => {
-            setDuration(d => d + 1)
-        }, 1000)
-
-        return () => clearInterval(interval)
-    }, [])
-
-    const formatDuration = (seconds: number) => {
-        const mins = Math.floor(seconds / 60)
-        const secs = seconds % 60
-        if (mins === 0) return `${secs}s`
-        return `${mins}:${secs.toString().padStart(2, '0')}`
+    type Channel = {
+        id: string
+        name: string
+        type: 'text' | 'voice' | 'canvas' | 'video' | 'image'
+        position: number
+        category_id?: string | null
+        description?: string | null
+        is_private?: boolean
     }
 
-    return (
-        <div className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-white/5 transition-colors group">
-            <Avatar className="w-5 h-5 border border-white/10">
-                <AvatarFallback className="bg-stone-700 text-white text-[10px] font-bold">
-                    {participant.identity[0]?.toUpperCase() || 'U'}
-                </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-stone-300 group-hover:text-white truncate transition-colors">
-                    {participant.identity}
-                </p>
-            </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-                {/* Timer (Discord-style) */}
-                <span className="text-[10px] text-stone-500 font-mono">
-                    {formatDuration(duration)}
-                </span>
-                {/* Green dot */}
-                <div className="w-2 h-2 rounded-full bg-green-500 opacity-70 group-hover:opacity-100 transition-opacity" />
-            </div>
-        </div>
-    )
-}
+    type Category = {
+        id: string
+        name: string
+        position: number
+    }
 
-export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, isMobile = false }: { roomId: string, roomName: string, onSelectChannel: (type: 'text' | 'voice' | 'canvas' | 'video' | 'image') => void, currentUser?: any, isMobile?: boolean }) {
-    const [activeChannel, setActiveChannel] = useState<'text' | 'voice' | 'canvas' | 'video' | 'image'>('text')
-    const [showProfilePopup, setShowProfilePopup] = useState(false)
-    const [showQuickSettings, setShowQuickSettings] = useState(false)
-    const [showServerSettings, setShowServerSettings] = useState(false)
-    const [editingChannelId, setEditingChannelId] = useState<string | null>(null)
-    const [duration, setDuration] = useState(0)
-    // Store participants per channel: { channelName: participants[] }
-    const [channelParticipants, setChannelParticipants] = useState<Record<string, { sid: string, identity: string }[]>>({})
-    const [channels, setChannels] = useState<Channel[]>([])
-    const [categories, setCategories] = useState<Category[]>([])
-    const [events, setEvents] = useState<RoomEvent[]>([])
-    const [isCreatingChannel, setIsCreatingChannel] = useState(false)
-    const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null)
-    const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null)
-    const [deletingEventId, setDeletingEventId] = useState<string | null>(null)
-    const [showPastEvents, setShowPastEvents] = useState(false)
-    const [creationMode, setCreationMode] = useState<'channel' | 'category' | 'event'>('channel')
-    const [newChannelName, setNewChannelName] = useState('')
-    const [newChannelType, setNewChannelType] = useState<'text' | 'voice' | 'canvas' | 'video' | 'image'>('text')
-    const [newChannelCategory, setNewChannelCategory] = useState<string>('')
-    const [newChannelDescription, setNewChannelDescription] = useState('')
-    const [newChannelPrivate, setNewChannelPrivate] = useState(false)
-    // Category fields
-    const [newCategoryName, setNewCategoryName] = useState('')
-    // Event fields
-    const [newEventName, setNewEventName] = useState('')
-    const [newEventDescription, setNewEventDescription] = useState('')
-    const [newEventStartTime, setNewEventStartTime] = useState('')
-    const [newEventEndTime, setNewEventEndTime] = useState('')
+    type RoomEvent = {
+        id: string
+        name: string
+        description?: string | null
+        start_time: string
+        end_time?: string | null
+        channel_id?: string | null
+        status?: 'upcoming' | 'active' | 'past'
+        participant_count?: number
+    }
 
-    const quickSettingsRef = useRef<HTMLDivElement>(null)
-    const userControlsRef = useRef<HTMLDivElement>(null)
-    const router = useRouter()
+    // Participant Item with Timer (Discord-style)
+    function ParticipantItem({ participant }: { participant: { sid: string, identity: string } }) {
+        const [duration, setDuration] = useState(0)
 
-    const { state, roomName: activeCallRoom, leaveRoom, joinRoom } = useCall()
-    const isConnected = state === 'connected'
+        useEffect(() => {
+            // Start timer when participant mounts
+            const interval = setInterval(() => {
+                setDuration(d => d + 1)
+            }, 1000)
 
-    const { can, loading: permissionsLoading } = useServerPermissions(roomId, currentUser?.id)
+            return () => clearInterval(interval)
+        }, [])
 
-    // Computed channel filters (must be before useEffects that use them)
-    const textChannels = channels.filter(c => c.type === 'text')
-    const voiceChannels = channels.filter(c => c.type === 'voice')
-    const videoChannels = channels.filter(c => c.type === 'video')
-    const canvasChannels = channels.filter(c => c.type === 'canvas')
-    const imageChannels = channels.filter(c => c.type === 'image')
-
-    // Fetch functions defined with useCallback so they can be called from modal
-    const fetchChannels = useCallback(async () => {
-        const { data } = await supabase
-            .from('room_channels')
-            .select('*')
-            .eq('room_id', roomId)
-            .order('position', { ascending: true })
-            .order('created_at', { ascending: true })
-
-        if (data) setChannels(data as Channel[])
-    }, [roomId])
-
-    const fetchCategories = useCallback(async () => {
-        const { data } = await supabase
-            .from('room_categories')
-            .select('*')
-            .eq('room_id', roomId)
-            .order('position', { ascending: true })
-
-        if (data) setCategories(data as Category[])
-    }, [roomId])
-
-    const fetchEvents = useCallback(async () => {
-        // Fetch all events (not just upcoming)
-        const { data: eventsData } = await supabase
-            .from('room_events')
-            .select('*')
-            .eq('room_id', roomId)
-            .order('start_time', { ascending: true })
-
-        if (!eventsData) return
-
-        // Fetch participant counts for each event
-        const eventsWithStatus: RoomEvent[] = await Promise.all(
-            eventsData.map(async (event) => {
-                // Get participant count
-                const { count } = await supabase
-                    .from('room_event_participants')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('event_id', event.id)
-                    .is('left_at', null)
-
-                // Compute status based on time
-                const now = new Date()
-                const startTime = new Date(event.start_time)
-                const endTime = event.end_time ? new Date(event.end_time) : null
-
-                let status: 'upcoming' | 'active' | 'past'
-                if (startTime > now) {
-                    status = 'upcoming'
-                } else if (!endTime || endTime > now) {
-                    status = 'active'
-                } else {
-                    status = 'past'
-                }
-
-                return {
-                    ...event,
-                    status,
-                    participant_count: count || 0
-                }
-            })
-        )
-
-        setEvents(eventsWithStatus)
-    }, [roomId])
-
-    const refetchAll = useCallback(() => {
-        fetchChannels()
-        fetchCategories()
-        fetchEvents()
-    }, [fetchChannels, fetchCategories, fetchEvents])
-
-    // Fetch Channels, Categories and Events
-    useEffect(() => {
-        fetchChannels()
-        fetchCategories()
-        fetchEvents()
-
-        // Realtime subscriptions
-        const channelSub = supabase
-            .channel(`room_channels:${roomId}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'room_channels', filter: `room_id=eq.${roomId}` }, () => {
-                fetchChannels()
-            })
-            .subscribe()
-
-        const categorySub = supabase
-            .channel(`room_categories:${roomId}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'room_categories', filter: `room_id=eq.${roomId}` }, () => {
-                fetchCategories()
-            })
-            .subscribe()
-
-        const eventSub = supabase
-            .channel(`room_events:${roomId}`)
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'room_events', filter: `room_id=eq.${roomId}` }, () => {
-                fetchEvents()
-            })
-            .subscribe()
-
-        return () => {
-            supabase.removeChannel(channelSub)
-            supabase.removeChannel(categorySub)
-            supabase.removeChannel(eventSub)
+        const formatDuration = (seconds: number) => {
+            const mins = Math.floor(seconds / 60)
+            const secs = seconds % 60
+            if (mins === 0) return `${secs}s`
+            return `${mins}:${secs.toString().padStart(2, '0')}`
         }
-    }, [roomId, fetchChannels, fetchCategories, fetchEvents])
 
-    // Dynamic Multi-Channel Participant System (Discord-style)
-    useEffect(() => {
-        if (voiceChannels.length === 0) return
+        return (
+            <div className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-white/5 transition-colors group">
+                <Avatar className="w-5 h-5 border border-white/10">
+                    <AvatarFallback className="bg-stone-700 text-white text-[10px] font-bold">
+                        {participant.identity[0]?.toUpperCase() || 'U'}
+                    </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-stone-300 group-hover:text-white truncate transition-colors">
+                        {participant.identity}
+                    </p>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {/* Timer (Discord-style) */}
+                    <span className="text-[10px] text-stone-500 font-mono">
+                        {formatDuration(duration)}
+                    </span>
+                    {/* Green dot */}
+                    <div className="w-2 h-2 rounded-full bg-green-500 opacity-70 group-hover:opacity-100 transition-opacity" />
+                </div>
+            </div>
+        )
+    }
 
-        // Fetch participants for a SPECIFIC channel (called on-demand)
-        const fetchChannelParticipants = async (channelName: string) => {
-            const livekitRoom = `${roomId}-${channelName}`
-            try {
-                const res = await fetch(`/api/livekit/participants?room=${encodeURIComponent(livekitRoom)}`)
-                const data = await res.json()
-                if (Array.isArray(data)) {
-                    const uniqueParticipants = Array.from(
-                        new Map(data.map((p: { sid: string, identity: string }) => [p.identity, p])).values()
-                    )
+    export function RoomSidebar({ roomId, roomName, onSelectChannel, currentUser, isMobile = false }: { roomId: string, roomName: string, onSelectChannel: (type: 'text' | 'voice' | 'canvas' | 'video' | 'image') => void, currentUser?: any, isMobile?: boolean }) {
+        const [activeChannel, setActiveChannel] = useState<'text' | 'voice' | 'canvas' | 'video' | 'image'>('text')
+        const [showProfilePopup, setShowProfilePopup] = useState(false)
+        const [showQuickSettings, setShowQuickSettings] = useState(false)
+        const [showServerSettings, setShowServerSettings] = useState(false)
+        const [editingChannelId, setEditingChannelId] = useState<string | null>(null)
+        const [duration, setDuration] = useState(0)
+        // Store participants per channel: { channelName: participants[] }
+        const [channelParticipants, setChannelParticipants] = useState<Record<string, { sid: string, identity: string }[]>>({})
+        const [channels, setChannels] = useState<Channel[]>([])
+        const [categories, setCategories] = useState<Category[]>([])
+        const [events, setEvents] = useState<RoomEvent[]>([])
+        const [isCreatingChannel, setIsCreatingChannel] = useState(false)
+        const [deletingChannelId, setDeletingChannelId] = useState<string | null>(null)
+        const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null)
+        const [deletingEventId, setDeletingEventId] = useState<string | null>(null)
+        const [showPastEvents, setShowPastEvents] = useState(false)
+        const [creationMode, setCreationMode] = useState<'channel' | 'category' | 'event'>('channel')
+        const [newChannelName, setNewChannelName] = useState('')
+        const [newChannelType, setNewChannelType] = useState<'text' | 'voice' | 'canvas' | 'video' | 'image'>('text')
+        const [newChannelCategory, setNewChannelCategory] = useState<string>('')
+        const [newChannelDescription, setNewChannelDescription] = useState('')
+        const [newChannelPrivate, setNewChannelPrivate] = useState(false)
+        // Category fields
+        const [newCategoryName, setNewCategoryName] = useState('')
+        // Event fields
+        const [newEventName, setNewEventName] = useState('')
+        const [newEventDescription, setNewEventDescription] = useState('')
+        const [newEventStartTime, setNewEventStartTime] = useState('')
+        const [newEventEndTime, setNewEventEndTime] = useState('')
+
+        const quickSettingsRef = useRef<HTMLDivElement>(null)
+        const userControlsRef = useRef<HTMLDivElement>(null)
+        const router = useRouter()
+
+        const { state, roomName: activeCallRoom, leaveRoom, joinRoom } = useCall()
+        const isConnected = state === 'connected'
+
+        const { can, loading: permissionsLoading } = useServerPermissions(roomId, currentUser?.id)
+
+        // Computed channel filters (must be before useEffects that use them)
+        const textChannels = channels.filter(c => c.type === 'text')
+        const voiceChannels = channels.filter(c => c.type === 'voice')
+        const videoChannels = channels.filter(c => c.type === 'video')
+        const canvasChannels = channels.filter(c => c.type === 'canvas')
+        const imageChannels = channels.filter(c => c.type === 'image')
+
+        // Fetch functions defined with useCallback so they can be called from modal
+        const fetchChannels = useCallback(async () => {
+            const { data } = await supabase
+                .from('room_channels')
+                .select('*')
+                .eq('room_id', roomId)
+                .order('position', { ascending: true })
+                .order('created_at', { ascending: true })
+
+            if (data) setChannels(data as Channel[])
+        }, [roomId])
+
+        const fetchCategories = useCallback(async () => {
+            const { data } = await supabase
+                .from('room_categories')
+                .select('*')
+                .eq('room_id', roomId)
+                .order('position', { ascending: true })
+
+            if (data) setCategories(data as Category[])
+        }, [roomId])
+
+        const fetchEvents = useCallback(async () => {
+            // Fetch all events (not just upcoming)
+            const { data: eventsData } = await supabase
+                .from('room_events')
+                .select('*')
+                .eq('room_id', roomId)
+                .order('start_time', { ascending: true })
+
+            if (!eventsData) return
+
+            // Fetch participant counts for each event
+            const eventsWithStatus: RoomEvent[] = await Promise.all(
+                eventsData.map(async (event) => {
+                    // Get participant count
+                    const { count } = await supabase
+                        .from('room_event_participants')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('event_id', event.id)
+                        .is('left_at', null)
+
+                    // Compute status based on time
+                    const now = new Date()
+                    const startTime = new Date(event.start_time)
+                    const endTime = event.end_time ? new Date(event.end_time) : null
+
+                    let status: 'upcoming' | 'active' | 'past'
+                    if (startTime > now) {
+                        status = 'upcoming'
+                    } else if (!endTime || endTime > now) {
+                        status = 'active'
+                    } else {
+                        status = 'past'
+                    }
+
+                    return {
+                        ...event,
+                        status,
+                        participant_count: count || 0
+                    }
+                })
+            )
+
+            setEvents(eventsWithStatus)
+        }, [roomId])
+
+        const refetchAll = useCallback(() => {
+            fetchChannels()
+            fetchCategories()
+            fetchEvents()
+        }, [fetchChannels, fetchCategories, fetchEvents])
+
+        // Fetch Channels, Categories and Events
+        useEffect(() => {
+            fetchChannels()
+            fetchCategories()
+            fetchEvents()
+
+            // Realtime subscriptions
+            const channelSub = supabase
+                .channel(`room_channels:${roomId}`)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'room_channels', filter: `room_id=eq.${roomId}` }, () => {
+                    fetchChannels()
+                })
+                .subscribe()
+
+            const categorySub = supabase
+                .channel(`room_categories:${roomId}`)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'room_categories', filter: `room_id=eq.${roomId}` }, () => {
+                    fetchCategories()
+                })
+                .subscribe()
+
+            const eventSub = supabase
+                .channel(`room_events:${roomId}`)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'room_events', filter: `room_id=eq.${roomId}` }, () => {
+                    fetchEvents()
+                })
+                .subscribe()
+
+            return () => {
+                supabase.removeChannel(channelSub)
+                supabase.removeChannel(categorySub)
+                supabase.removeChannel(eventSub)
+            }
+        }, [roomId, fetchChannels, fetchCategories, fetchEvents])
+
+        // Dynamic Multi-Channel Participant System (Discord-style)
+        useEffect(() => {
+            if (voiceChannels.length === 0) return
+
+            // Fetch participants for a SPECIFIC channel (called on-demand)
+            const fetchChannelParticipants = async (channelName: string) => {
+                const livekitRoom = `${roomId}-${channelName}`
+                try {
+                    const res = await fetch(`/api/livekit/participants?room=${encodeURIComponent(livekitRoom)}`)
+                    const data = await res.json()
+                    if (Array.isArray(data)) {
+                        const uniqueParticipants = Array.from(
+                            new Map(data.map((p: { sid: string, identity: string }) => [p.identity, p])).values()
+                        )
+                        setChannelParticipants(prev => ({
+                            ...prev,
+                            [channelName]: uniqueParticipants
+                        }))
+                    }
+                } catch (e) {
                     setChannelParticipants(prev => ({
                         ...prev,
-                        [channelName]: uniqueParticipants
+                        [channelName]: []
                     }))
                 }
-            } catch (e) {
-                setChannelParticipants(prev => ({
-                    ...prev,
-                    [channelName]: []
-                }))
             }
-        }
 
-        // NO initial fetch - wait for users to actually join
+            // NO initial fetch - wait for users to actually join
 
-        // WebSocket: Subscribe to ALL voice channels
-        const WS_URL = process.env.NEXT_PUBLIC_MATCHMAKING_WS_URL || 'ws://localhost:8080'
-        let ws: WebSocket | null = null
-        let reconnectTimeout: NodeJS.Timeout
+            // WebSocket: Subscribe to ALL voice channels
+            const WS_URL = process.env.NEXT_PUBLIC_MATCHMAKING_WS_URL || 'ws://localhost:8080'
+            let ws: WebSocket | null = null
+            let reconnectTimeout: NodeJS.Timeout
 
-        const connect = () => {
-            try {
-                ws = new WebSocket(WS_URL)
+            const connect = () => {
+                try {
+                    ws = new WebSocket(WS_URL)
 
-                ws.onopen = () => {
+                    ws.onopen = () => {
+                        voiceChannels.forEach((channel) => {
+                            const livekitRoom = `${roomId}-${channel.name}`
+                            ws?.send(JSON.stringify({
+                                type: 'subscribe_room',
+                                data: { roomId: livekitRoom }
+                            }))
+                        })
+                    }
+
+                    ws.onmessage = (event) => {
+                        try {
+                            const message = JSON.parse(event.data)
+                            if (message.type === 'participants_update' && message.roomName) {
+                                const channelName = message.roomName.replace(`${roomId}-`, '')
+                                fetchChannelParticipants(channelName)
+                            }
+                        } catch (e) { }
+                    }
+
+                    ws.onclose = () => {
+                        reconnectTimeout = setTimeout(connect, 3000)
+                    }
+
+                    ws.onerror = () => {
+                        ws?.close()
+                    }
+                } catch (e) { }
+            }
+
+            connect()
+
+            return () => {
+                clearTimeout(reconnectTimeout)
+                if (ws && ws.readyState === WebSocket.OPEN) {
                     voiceChannels.forEach((channel) => {
                         const livekitRoom = `${roomId}-${channel.name}`
                         ws?.send(JSON.stringify({
-                            type: 'subscribe_room',
+                            type: 'unsubscribe_room',
                             data: { roomId: livekitRoom }
                         }))
                     })
                 }
+                if (ws) {
+                    ws.close()
+                }
+            }
+        }, [voiceChannels, roomId])
 
-                ws.onmessage = (event) => {
+        // Immediate fetch when user joins a channel
+        useEffect(() => {
+            if (activeCallRoom) {
+                // Extract channel name from activeCallRoom (format: roomId-ChannelName)
+                const channelName = activeCallRoom.replace(`${roomId}-`, '')
+                // Fetch immediately so user sees themselves
+                const fetchNow = async () => {
                     try {
-                        const message = JSON.parse(event.data)
-                        if (message.type === 'participants_update' && message.roomName) {
-                            const channelName = message.roomName.replace(`${roomId}-`, '')
-                            fetchChannelParticipants(channelName)
+                        const res = await fetch(`/api/livekit/participants?room=${encodeURIComponent(activeCallRoom)}`)
+                        const data = await res.json()
+                        if (Array.isArray(data)) {
+                            setChannelParticipants(prev => ({
+                                ...prev,
+                                [channelName]: data
+                            }))
                         }
                     } catch (e) { }
                 }
+                fetchNow()
+            }
+        }, [activeCallRoom, roomId])
 
-                ws.onclose = () => {
-                    reconnectTimeout = setTimeout(connect, 3000)
-                }
+        // Timer
+        useEffect(() => {
+            let interval: NodeJS.Timeout
+            if (isConnected) {
+                interval = setInterval(() => setDuration(d => d + 1), 1000)
+            } else {
+                setDuration(0)
+            }
+            return () => clearInterval(interval)
+        }, [isConnected])
 
-                ws.onerror = () => {
-                    ws?.close()
+        // Close quick settings on click outside
+        useEffect(() => {
+            function handleClickOutside(event: MouseEvent) {
+                if (quickSettingsRef.current && !quickSettingsRef.current.contains(event.target as Node)) {
+                    setShowQuickSettings(false)
                 }
-            } catch (e) { }
+            }
+            document.addEventListener("mousedown", handleClickOutside)
+            return () => {
+                document.removeEventListener("mousedown", handleClickOutside)
+            }
+        }, [])
+
+        const formatTime = (seconds: number) => {
+            const mins = Math.floor(seconds / 60)
+            const secs = seconds % 60
+            return `${mins}:${secs.toString().padStart(2, '0')}`
         }
 
-        connect()
+        const [contextMenu, setContextMenu] = useState<{ x: number, y: number, channelId: string } | null>(null)
 
-        return () => {
-            clearTimeout(reconnectTimeout)
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                voiceChannels.forEach((channel) => {
-                    const livekitRoom = `${roomId}-${channel.name}`
-                    ws?.send(JSON.stringify({
-                        type: 'unsubscribe_room',
-                        data: { roomId: livekitRoom }
-                    }))
+        const handleContextMenu = (e: React.MouseEvent, channelId: string) => {
+            e.preventDefault()
+            setContextMenu({ x: e.clientX, y: e.clientY, channelId })
+        }
+
+        useEffect(() => {
+            const closeMenu = () => setContextMenu(null)
+            window.addEventListener('click', closeMenu)
+            return () => window.removeEventListener('click', closeMenu)
+        }, [])
+
+        const handleCopyChannelId = (id: string) => {
+            navigator.clipboard.writeText(id)
+            toast.success('Channel ID copied')
+        }
+
+        const handleCreateChannel = async () => {
+            if (!newChannelName.trim()) return
+            if (!can('manage_channels')) {
+                toast.error('You do not have permission to create channels')
+                return
+            }
+
+            const { error } = await supabase
+                .from('room_channels')
+                .insert({
+                    room_id: roomId,
+                    name: newChannelName,
+                    type: newChannelType,
+                    position: channels.length,
+                    category_id: newChannelCategory || null,
+                    description: newChannelDescription || null,
+                    is_private: newChannelPrivate
                 })
-            }
-            if (ws) {
-                ws.close()
-            }
-        }
-    }, [voiceChannels, roomId])
 
-    // Immediate fetch when user joins a channel
-    useEffect(() => {
-        if (activeCallRoom) {
-            // Extract channel name from activeCallRoom (format: roomId-ChannelName)
-            const channelName = activeCallRoom.replace(`${roomId}-`, '')
-            // Fetch immediately so user sees themselves
-            const fetchNow = async () => {
-                try {
-                    const res = await fetch(`/api/livekit/participants?room=${encodeURIComponent(activeCallRoom)}`)
-                    const data = await res.json()
-                    if (Array.isArray(data)) {
-                        setChannelParticipants(prev => ({
-                            ...prev,
-                            [channelName]: data
-                        }))
-                    }
-                } catch (e) { }
-            }
-            fetchNow()
-        }
-    }, [activeCallRoom, roomId])
-
-    // Timer
-    useEffect(() => {
-        let interval: NodeJS.Timeout
-        if (isConnected) {
-            interval = setInterval(() => setDuration(d => d + 1), 1000)
-        } else {
-            setDuration(0)
-        }
-        return () => clearInterval(interval)
-    }, [isConnected])
-
-    // Close quick settings on click outside
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (quickSettingsRef.current && !quickSettingsRef.current.contains(event.target as Node)) {
-                setShowQuickSettings(false)
+            if (error) {
+                console.error('Channel creation error:', error)
+                toast.error(`Failed to create channel: ${error.message}`)
+            } else {
+                toast.success('Channel created')
+                resetCreationForm()
             }
         }
-        document.addEventListener("mousedown", handleClickOutside)
-        return () => {
-            document.removeEventListener("mousedown", handleClickOutside)
-        }
-    }, [])
 
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60)
-        const secs = seconds % 60
-        return `${mins}:${secs.toString().padStart(2, '0')}`
-    }
-
-    const [contextMenu, setContextMenu] = useState<{ x: number, y: number, channelId: string } | null>(null)
-
-    const handleContextMenu = (e: React.MouseEvent, channelId: string) => {
-        e.preventDefault()
-        setContextMenu({ x: e.clientX, y: e.clientY, channelId })
-    }
-
-    useEffect(() => {
-        const closeMenu = () => setContextMenu(null)
-        window.addEventListener('click', closeMenu)
-        return () => window.removeEventListener('click', closeMenu)
-    }, [])
-
-    const handleCopyChannelId = (id: string) => {
-        navigator.clipboard.writeText(id)
-        toast.success('Channel ID copied')
-    }
-
-    const handleCreateChannel = async () => {
-        if (!newChannelName.trim()) return
-        if (!can('manage_channels')) {
-            toast.error('You do not have permission to create channels')
-            return
-        }
-
-        const { error } = await supabase
-            .from('room_channels')
-            .insert({
-                room_id: roomId,
-                name: newChannelName,
-                type: newChannelType,
-                position: channels.length,
-                category_id: newChannelCategory || null,
-                description: newChannelDescription || null,
-                is_private: newChannelPrivate
-            })
-
-        if (error) {
-            console.error('Channel creation error:', error)
-            toast.error(`Failed to create channel: ${error.message}`)
-        } else {
-            toast.success('Channel created')
-            resetCreationForm()
-        }
-    }
-
-    const handleCreateCategory = async () => {
-        if (!newCategoryName.trim()) return
-        if (!can('manage_channels')) {
-            toast.error('You do not have permission to create categories')
-            return
-        }
-
-        const { data: { user } } = await supabase.auth.getUser()
-        const { error } = await supabase
-            .from('room_categories')
-            .insert({
-                room_id: roomId,
-                name: newCategoryName,
-                position: categories.length,
-                created_by: user?.id
-            })
-
-        if (error) {
-            console.error('Category creation error:', error)
-            toast.error(`Failed to create category: ${error.message}`)
-        } else {
-            toast.success('Category created')
-            resetCreationForm()
-        }
-    }
-
-    const handleCreateEvent = async () => {
-        if (!newEventName.trim() || !newEventStartTime) {
-            toast.error('Event name and start time are required')
-            return
-        }
-        if (!can('manage_channels')) {
-            toast.error('You do not have permission to create events')
-            return
-        }
-
-        const { data: { user } } = await supabase.auth.getUser()
-        const { error } = await supabase
-            .from('room_events')
-            .insert({
-                room_id: roomId,
-                name: newEventName,
-                description: newEventDescription || null,
-                start_time: newEventStartTime,
-                end_time: newEventEndTime || null,
-                created_by: user?.id
-            })
-
-        if (error) {
-            console.error('Event creation error:', error)
-            toast.error(`Failed to create event: ${error.message}`)
-        } else {
-            toast.success('Event created')
-            resetCreationForm()
-        }
-    }
-
-    const handleSubmitCreation = () => {
-        if (creationMode === 'channel') handleCreateChannel()
-        else if (creationMode === 'category') handleCreateCategory()
-        else if (creationMode === 'event') handleCreateEvent()
-    }
-
-    const resetCreationForm = () => {
-        setIsCreatingChannel(false)
-        setNewChannelName('')
-        setNewChannelDescription('')
-        setNewChannelCategory('')
-        setNewChannelPrivate(false)
-        setNewCategoryName('')
-        setNewEventName('')
-        setNewEventDescription('')
-        setNewEventStartTime('')
-        setNewEventEndTime('')
-        setCreationMode('channel')
-    }
-
-    const handleDeleteChannel = async (channelId: string) => {
-        if (!can('manage_channels')) {
-            toast.error('You do not have permission to delete channels')
-            return
-        }
-
-        const { error } = await supabase
-            .from('room_channels')
-            .delete()
-            .eq('id', channelId)
-
-        if (error) {
-            console.error('Channel deletion error:', error)
-            toast.error('Failed to delete channel')
-        } else {
-            toast.success('Channel deleted')
-            setChannels(prev => prev.filter(c => c.id !== channelId))
-            setDeletingChannelId(null)
-        }
-    }
-
-    const handleDeleteCategory = async (categoryId: string) => {
-        if (!can('manage_channels')) {
-            toast.error('You do not have permission to delete categories')
-            return
-        }
-
-        const { error } = await supabase
-            .from('room_categories')
-            .delete()
-            .eq('id', categoryId)
-
-        if (error) {
-            console.error('Category deletion error:', error)
-            toast.error('Failed to delete category')
-        } else {
-            toast.success('Category deleted')
-            setCategories(prev => prev.filter(c => c.id !== categoryId))
-            setDeletingCategoryId(null)
-        }
-    }
-
-    const handleDeleteEvent = async (eventId: string) => {
-        if (!can('manage_channels')) {
-            toast.error('You do not have permission to delete events')
-            return
-        }
-
-        const { error } = await supabase
-            .from('room_events')
-            .delete()
-            .eq('id', eventId)
-
-        if (error) {
-            console.error('Event deletion error:', error)
-            toast.error('Failed to delete event')
-        } else {
-            toast.success('Event deleted')
-            setEvents(prev => prev.filter(e => e.id !== eventId))
-            setDeletingEventId(null)
-        }
-    }
-
-    const handleJoinEvent = async (event: RoomEvent) => {
-        if (!currentUser?.id) return
-
-        // Add user to event participants
-        const { error } = await supabase
-            .from('room_event_participants')
-            .upsert({
-                event_id: event.id,
-                user_id: currentUser.id,
-                left_at: null
-            }, {
-                onConflict: 'event_id,user_id'
-            })
-
-        if (error) {
-            console.error('Join event error:', error)
-            toast.error('Failed to join event')
-            return
-        }
-
-        // If event has a linked channel, open it
-        if (event.channel_id) {
-            const channel = channels.find(c => c.id === event.channel_id)
-            if (channel) {
-                setActiveChannel(channel.type)
-                onSelectChannel(channel.type)
-                toast.success(`Joined ${event.name}!`)
+        const handleCreateCategory = async () => {
+            if (!newCategoryName.trim()) return
+            if (!can('manage_channels')) {
+                toast.error('You do not have permission to create categories')
+                return
             }
-        } else {
-            toast.success('Marked as attending!')
+
+            const { data: { user } } = await supabase.auth.getUser()
+            const { error } = await supabase
+                .from('room_categories')
+                .insert({
+                    room_id: roomId,
+                    name: newCategoryName,
+                    position: categories.length,
+                    created_by: user?.id
+                })
+
+            if (error) {
+                console.error('Category creation error:', error)
+                toast.error(`Failed to create category: ${error.message}`)
+            } else {
+                toast.success('Category created')
+                resetCreationForm()
+            }
         }
 
-        // Refresh events to update participant count
-        fetchEvents()
-    }
+        const handleCreateEvent = async () => {
+            if (!newEventName.trim() || !newEventStartTime) {
+                toast.error('Event name and start time are required')
+                return
+            }
+            if (!can('manage_channels')) {
+                toast.error('You do not have permission to create events')
+                return
+            }
 
-    // (Moved these computed values earlier to fix TS scoping)
+            const { data: { user } } = await supabase.auth.getUser()
+            const { error } = await supabase
+                .from('room_events')
+                .insert({
+                    room_id: roomId,
+                    name: newEventName,
+                    description: newEventDescription || null,
+                    start_time: newEventStartTime,
+                    end_time: newEventEndTime || null,
+                    created_by: user?.id
+                })
 
-    // Filter events by status
-    const activeEvents = events.filter(e => e.status === 'active')
-    const upcomingEvents = events.filter(e => e.status === 'upcoming')
-    const pastEvents = events.filter(e => e.status === 'past')
+            if (error) {
+                console.error('Event creation error:', error)
+                toast.error(`Failed to create event: ${error.message}`)
+            } else {
+                toast.success('Event created')
+                resetCreationForm()
+            }
+        }
 
-    return (
-        <div className={cn(
-            "bg-stone-950/40 backdrop-blur-md flex flex-col border-r border-white/5 h-full relative",
-            isMobile ? "w-full" : "w-60"
-        )}>
-            {/* Room Header */}
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <div className="h-12 px-4 flex items-center justify-between shadow-sm hover:bg-white/5 cursor-pointer transition-colors border-b border-white/5 shrink-0">
-                        <h1 className="font-bold text-white truncate font-serif tracking-wide">{roomName}</h1>
-                        <ChevronDown className="w-4 h-4 text-stone-400" />
-                    </div>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 bg-stone-900 border-white/10 text-stone-200 ml-2">
-                    <DropdownMenuLabel className="text-xs font-bold text-stone-500 uppercase tracking-wider">Server Settings</DropdownMenuLabel>
-                    <DropdownMenuSeparator className="bg-white/10" />
-                    {(can('manage_server') || can('admin')) && (
-                        <DropdownMenuItem onClick={() => setShowServerSettings(true)} className="cursor-pointer gap-2">
-                            <Settings className="w-4 h-4" /> Server Settings
+        const handleSubmitCreation = () => {
+            if (creationMode === 'channel') handleCreateChannel()
+            else if (creationMode === 'category') handleCreateCategory()
+            else if (creationMode === 'event') handleCreateEvent()
+        }
+
+        const resetCreationForm = () => {
+            setIsCreatingChannel(false)
+            setNewChannelName('')
+            setNewChannelDescription('')
+            setNewChannelCategory('')
+            setNewChannelPrivate(false)
+            setNewCategoryName('')
+            setNewEventName('')
+            setNewEventDescription('')
+            setNewEventStartTime('')
+            setNewEventEndTime('')
+            setCreationMode('channel')
+        }
+
+        const handleDeleteChannel = async (channelId: string) => {
+            if (!can('manage_channels')) {
+                toast.error('You do not have permission to delete channels')
+                return
+            }
+
+            const { error } = await supabase
+                .from('room_channels')
+                .delete()
+                .eq('id', channelId)
+
+            if (error) {
+                console.error('Channel deletion error:', error)
+                toast.error('Failed to delete channel')
+            } else {
+                toast.success('Channel deleted')
+                setChannels(prev => prev.filter(c => c.id !== channelId))
+                setDeletingChannelId(null)
+            }
+        }
+
+        const handleDeleteCategory = async (categoryId: string) => {
+            if (!can('manage_channels')) {
+                toast.error('You do not have permission to delete categories')
+                return
+            }
+
+            const { error } = await supabase
+                .from('room_categories')
+                .delete()
+                .eq('id', categoryId)
+
+            if (error) {
+                console.error('Category deletion error:', error)
+                toast.error('Failed to delete category')
+            } else {
+                toast.success('Category deleted')
+                setCategories(prev => prev.filter(c => c.id !== categoryId))
+                setDeletingCategoryId(null)
+            }
+        }
+
+        const handleDeleteEvent = async (eventId: string) => {
+            if (!can('manage_channels')) {
+                toast.error('You do not have permission to delete events')
+                return
+            }
+
+            const { error } = await supabase
+                .from('room_events')
+                .delete()
+                .eq('id', eventId)
+
+            if (error) {
+                console.error('Event deletion error:', error)
+                toast.error('Failed to delete event')
+            } else {
+                toast.success('Event deleted')
+                setEvents(prev => prev.filter(e => e.id !== eventId))
+                setDeletingEventId(null)
+            }
+        }
+
+        const handleJoinEvent = async (event: RoomEvent) => {
+            if (!currentUser?.id) return
+
+            // Add user to event participants
+            const { error } = await supabase
+                .from('room_event_participants')
+                .upsert({
+                    event_id: event.id,
+                    user_id: currentUser.id,
+                    left_at: null
+                }, {
+                    onConflict: 'event_id,user_id'
+                })
+
+            if (error) {
+                console.error('Join event error:', error)
+                toast.error('Failed to join event')
+                return
+            }
+
+            // If event has a linked channel, open it
+            if (event.channel_id) {
+                const channel = channels.find(c => c.id === event.channel_id)
+                if (channel) {
+                    setActiveChannel(channel.type)
+                    onSelectChannel(channel.type)
+                    toast.success(`Joined ${event.name}!`)
+                }
+            } else {
+                toast.success('Marked as attending!')
+            }
+
+            // Refresh events to update participant count
+            fetchEvents()
+        }
+
+        // (Moved these computed values earlier to fix TS scoping)
+
+        // Filter events by status
+        const activeEvents = events.filter(e => e.status === 'active')
+        const upcomingEvents = events.filter(e => e.status === 'upcoming')
+        const pastEvents = events.filter(e => e.status === 'past')
+
+        return (
+            <div className={cn(
+                "bg-stone-950/40 backdrop-blur-md flex flex-col border-r border-white/5 h-full relative",
+                isMobile ? "w-full" : "w-60"
+            )}>
+                {/* Room Header */}
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <div className="h-12 px-4 flex items-center justify-between shadow-sm hover:bg-white/5 cursor-pointer transition-colors border-b border-white/5 shrink-0">
+                            <h1 className="font-bold text-white truncate font-serif tracking-wide">{roomName}</h1>
+                            <ChevronDown className="w-4 h-4 text-stone-400" />
+                        </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-56 bg-stone-900 border-white/10 text-stone-200 ml-2">
+                        <DropdownMenuLabel className="text-xs font-bold text-stone-500 uppercase tracking-wider">Server Settings</DropdownMenuLabel>
+                        <DropdownMenuSeparator className="bg-white/10" />
+                        {(can('manage_server') || can('admin')) && (
+                            <DropdownMenuItem onClick={() => setShowServerSettings(true)} className="cursor-pointer gap-2">
+                                <Settings className="w-4 h-4" /> Server Settings
+                            </DropdownMenuItem>
+                        )}
+                        {(can('manage_channels') || can('admin')) && (
+                            <DropdownMenuItem onClick={() => setIsCreatingChannel(true)} className="cursor-pointer gap-2">
+                                <Plus className="w-4 h-4" /> Create Channel
+                            </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator className="bg-white/10" />
+                        <DropdownMenuItem className="cursor-pointer gap-2">
+                            <Shield className="w-4 h-4" /> Privacy Settings
                         </DropdownMenuItem>
-                    )}
-                    {(can('manage_channels') || can('admin')) && (
-                        <DropdownMenuItem onClick={() => setIsCreatingChannel(true)} className="cursor-pointer gap-2">
-                            <Plus className="w-4 h-4" /> Create Channel
+                        <DropdownMenuItem className="cursor-pointer gap-2 text-red-400 focus:text-red-400 focus:bg-red-500/10" onClick={() => router.push('/sangha')}>
+                            <LogOut className="w-4 h-4" /> Leave Server
                         </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator className="bg-white/10" />
-                    <DropdownMenuItem className="cursor-pointer gap-2">
-                        <Shield className="w-4 h-4" /> Privacy Settings
-                    </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer gap-2 text-red-400 focus:text-red-400 focus:bg-red-500/10" onClick={() => router.push('/sangha')}>
-                        <LogOut className="w-4 h-4" /> Leave Server
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+                    </DropdownMenuContent>
+                </DropdownMenu>
 
-            {/* Channels List - Scrollable without visible scrollbar */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-4 no-scrollbar">
-                {/* Text Channels */}
-                <ChannelGroup
-                    title="Text Channels"
-                    channels={textChannels}
-                    type="text"
-                    activeChannel={activeChannel}
-                    onSelect={setActiveChannel}
-                    onSelectGlobal={onSelectChannel}
-                    canManage={can('manage_channels')}
-                    onCreate={() => { setIsCreatingChannel(true); setNewChannelType('text') }}
-                    onEdit={setEditingChannelId}
-                    onDelete={setDeletingChannelId}
-                    onContextMenu={handleContextMenu}
-                />
+                {/* Channels List - Scrollable without visible scrollbar */}
+                <div className="flex-1 overflow-y-auto p-2 space-y-4 no-scrollbar">
+                    {/* Text Channels */}
+                    <ChannelGroup
+                        title="Text Channels"
+                        channels={textChannels}
+                        type="text"
+                        activeChannel={activeChannel}
+                        onSelect={setActiveChannel}
+                        onSelectGlobal={onSelectChannel}
+                        canManage={can('manage_channels')}
+                        onCreate={() => { setIsCreatingChannel(true); setNewChannelType('text') }}
+                        onEdit={setEditingChannelId}
+                        onDelete={setDeletingChannelId}
+                        onContextMenu={handleContextMenu}
+                    />
 
-                {/* Voice Channels */}
-                <ChannelGroup
-                    title="Voice Channels"
-                    channels={voiceChannels}
-                    type="voice"
-                    activeChannel={activeChannel}
+                    {/* Voice Channels */}
+                    <ChannelGroup
+                        title="Voice Channels"
+                        channels={voiceChannels}
+                        type="voice"
+                        activeChannel={activeChannel}
                     onSelect={setActiveChannel}
                     onSelectGlobal={onSelectChannel}
                     canManage={can('manage_channels')}
