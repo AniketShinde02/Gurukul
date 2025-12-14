@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useVerificationGate } from '@/hooks/useVerificationGate'
 import { AgeVerificationModal } from '@/components/AgeVerificationModal'
 import { CheckCircle, Circle, Loader2 } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 
-export default function VerifyPage() {
+function VerifyContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const { isVerified, isLoading, missingRequirements, recheckVerification } = useVerificationGate()
@@ -166,5 +166,17 @@ export default function VerifyPage() {
                 onVerified={handleAgeVerified}
             />
         </div>
+    )
+}
+
+export default function VerifyPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-gradient-to-br from-stone-950 via-stone-900 to-stone-950 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+            </div>
+        }>
+            <VerifyContent />
+        </Suspense>
     )
 }
