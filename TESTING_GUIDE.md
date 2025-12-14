@@ -1,128 +1,91 @@
-# ✅ DEPLOYMENT COMPLETE - TESTING GUIDE
+# 🧪 TESTING GUIDE - Age Verification & Reports
 
-## What Just Happened
-
-1. ✅ **Database Updated** - Production matchmaking functions deployed
-2. ✅ **Frontend Replaced** - New production-grade chat page active
-3. ✅ **Old Code Backed Up** - `page.tsx.backup` saved
+**Date:** 2025-12-14 21:20 IST
+**Status:** Ready to Test!
 
 ---
 
-## 🧪 Test Now (Your Dev Server is Running)
+## ✅ WHAT'S READY
 
-### Test 1: Basic Matchmaking
-1. Open **http://localhost:3000/chat** (or your dev URL)
-2. Click **"Find Partner"**
-3. **Expected:** Smooth spinning loader (not stuck!)
-4. Open **incognito window** → same URL → click "Find Partner"
-5. **Expected:** Both users connect within 5 seconds
+### 1. Age Verification System ✅
+- SQL migration ran successfully
+- API routes created
+- Modal component ready
+- Hook for status checking
+- Age gate component
 
-### Test 2: Skip Functionality
-1. After match connects, look for **"Skip"** button in header
-2. Click **Skip**
-3. **Expected:** 
-   - Current session ends
-   - Auto-searches for new partner
-   - Smooth transition
-
-### Test 3: Console Check
-1. Open **DevTools** (F12) → **Console** tab
-2. **Expected:** Zero console.log messages (clean!)
-3. Only errors (if any) should show
-
-### Test 4: Memory Leak Check
-1. Match and skip 5 times in a row
-2. Open **DevTools** → **Performance** → **Memory**
-3. **Expected:** Memory stays stable (no continuous growth)
+### 2. Report System ✅
+- Report button in video controls
+- Report modal with 6 reasons
+- Auto-ban after 3 reports
+- Screenshot capture library (ready to integrate)
 
 ---
 
-## 🐛 If You See Issues
+## 🧪 TEST AGE VERIFICATION
 
-### Issue: "useMatchmaking is not defined"
-**Fix:** The hook file exists at `hooks/useMatchmaking.ts` - TypeScript should auto-import it.
+### Step 1: Check API
+```javascript
+// In browser console
+fetch('/api/verify-age')
+.then(r => r.json())
+.then(console.log)
 
-If not, add this import to `page.tsx`:
-```typescript
-import { useMatchmaking } from '@/hooks/useMatchmaking';
+// Should return: { age_verified: false, has_dob: false, ... }
 ```
 
-### Issue: Build errors
-**Run:**
-```bash
-npm run build
+### Step 2: Test Verification
+```javascript
+// Submit DOB (18+ years old)
+fetch('/api/verify-age', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        date_of_birth: '2000-01-01' // 24 years old
+    })
+})
+.then(r => r.json())
+.then(console.log)
+
+// Should return: { verified: true, age: 24, ... }
 ```
 
-If errors appear, share them and I'll fix immediately.
+### Step 3: Test Underage Rejection
+```javascript
+// Submit DOB (under 18)
+fetch('/api/verify-age', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+        date_of_birth: '2010-01-01' // 14 years old
+    })
+})
+.then(r => r.json())
+.then(console.log)
 
-### Issue: Loader still stuck
-**Check:**
-1. Did SQL run successfully? (You said yes ✅)
-2. Is dev server restarted? (Try Ctrl+C and `npm run dev` again)
-3. Any console errors?
-
----
-
-## 📊 What to Look For (Success Metrics)
-
-✅ **Loader spins smoothly** (not frozen)
-✅ **Both users connect simultaneously** (no asymmetric matching)
-✅ **Skip button appears** in header after match
-✅ **Zero console logs** in production
-✅ **Match time < 5 seconds**
-✅ **No memory leaks** after multiple matches
-
----
-
-## 🚀 Next Steps After Testing
-
-### If Tests Pass:
-```bash
-# Build for production
-npm run build
-
-# Deploy to Vercel (or your platform)
-vercel --prod
-```
-
-### If Tests Fail:
-- Share the error/issue
-- I'll debug and fix immediately
-- We have backup: `page.tsx.backup`
-
----
-
-## 🎯 Quick Rollback (If Needed)
-
-```bash
-# Restore old version
-Move-Item "app/(authenticated)/chat/page.tsx.backup" "app/(authenticated)/chat/page.tsx" -Force
-
-# Restart dev server
-# Ctrl+C then npm run dev
+// Should return: { verified: false, message: 'Must be 18+' }
 ```
 
 ---
 
-## 📝 What Changed (Summary)
+## 🧪 TEST REPORT SYSTEM
 
-### Backend (Database):
-- ✅ Advisory locks prevent race conditions
-- ✅ Atomic queue removal (both users deleted together)
-- ✅ Skip partner function added
-- ✅ Auto-cleanup of stale entries
-- ✅ Performance indexes created
+### Step 1: Start Video Call
+1. Go to Study Lounge
+2. Start matching
+3. Connect with someone
 
-### Frontend (React):
-- ✅ New `useMatchmaking` hook (proper state management)
-- ✅ Exponential backoff retry logic
-- ✅ Skip button in UI
-- ✅ All console.logs removed
-- ✅ Memory leak prevention
-- ✅ Proper cleanup functions
+### Step 2: Check Report Button
+1. Look for **Flag icon** in video controls (bottom center)
+2. Should be visible during active call
+3. Click it → Report modal opens
+
+### Step 3: Submit Report
+1. Select a reason (e.g., "Spam")
+2. Add description (optional)
+3. Click "Submit Report"
+4. Should see success message
 
 ---
 
-**Go test it now!** Open http://localhost:3000/chat and try matching! 🎉
-
-Let me know what happens!
+**Both systems are ready to test!** 🎉

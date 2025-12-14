@@ -9,6 +9,9 @@ interface VideoCallProps {
   onToggleMic: () => void
   onToggleCamera: () => void
   onEndCall: () => void
+  partnerId?: string
+  partnerUsername?: string
+  sessionId?: string
 }
 
 export function VideoCall({
@@ -18,7 +21,10 @@ export function VideoCall({
   isCameraOn,
   onToggleMic,
   onToggleCamera,
-  onEndCall
+  onEndCall,
+  partnerId,
+  partnerUsername,
+  sessionId
 }: VideoCallProps) {
   return (
     <div className="relative w-full h-full flex flex-col bg-black/90 rounded-3xl overflow-hidden shadow-2xl border border-white/10">
@@ -37,6 +43,9 @@ export function VideoCall({
           onToggleMic={onToggleMic}
           onToggleCamera={onToggleCamera}
           onEndCall={onEndCall}
+          partnerId={partnerId}
+          partnerUsername={partnerUsername}
+          sessionId={sessionId}
         />
       </div>
     </div>
