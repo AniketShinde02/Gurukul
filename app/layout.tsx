@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from 'react-hot-toast'
 import { Analytics } from '@vercel/analytics/next'
 import { QueryProvider } from '@/components/providers/QueryProvider'
+import { VerificationGuard } from '@/components/VerificationGuard'
 
 const outfit = Outfit({ subsets: ['latin'], variable: '--font-outfit' })
 const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair' })
@@ -35,7 +36,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryProvider>
-            {children}
+            <VerificationGuard>
+              {children}
+            </VerificationGuard>
           </QueryProvider>
           <Toaster
             position="top-right"

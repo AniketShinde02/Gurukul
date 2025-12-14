@@ -35,6 +35,18 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL('/', req.url))
   }
 
+  // ✅ Verification check for Study Match and Sangha
+  // These features require age + email verification
+  const requiresVerification = path.startsWith('/sangha') || path.startsWith('/chat')
+
+  if (requiresVerification) {
+    // Add header to tell client to check verification
+    // Client-side hook will handle showing modal/toast
+    const response = NextResponse.next()
+    response.headers.set('x-requires-verification', 'true')
+    return response
+  }
+
   // ✅ For full user verification, do it in Server Component or route handler
   // Don't do database lookups in middleware - they block every request
   return NextResponse.next()
