@@ -35,10 +35,25 @@ export async function GET(request: Request) {
             missing_requirements: string[]
         }
 
+        const missing = [...(check.missing_requirements || [])]
+
+        // Check email verification for ALL users (OAuth + Email/Password)
+        // OAuth users have email_confirmed_at set automatically by provider
+        // Email/Password users need to verify via email link
+        const isEmailVerified = user.email_confirmed_at !== null && user.email_confirmed_at !== undefined
+
+        if (!isEmailVerified) {
+            missing.push('email_verified')
+        }
+
+        // Determine final status
+        const isVerified = missing.length === 0
+        const level = isVerified ? 'basic' : 'none'
+
         return NextResponse.json({
-            is_verified: check.is_verified,
-            verification_level: check.verification_level,
-            missing_requirements: check.missing_requirements || []
+            is_verified: isVerified,
+            verification_level: level,
+            missing_requirements: missing
         })
 
     } catch (error: any) {
