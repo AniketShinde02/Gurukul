@@ -22,8 +22,7 @@
                                 -- 3. Insert default requirements
                                 INSERT INTO verification_requirements (requirement_key, requirement_name, is_required, required_for_level)
                                 VALUES 
-                                    ('age_verified', 'Age Verification (18+)', TRUE, 'basic'),
-                                    ('email_verified', 'Email Verification', TRUE, 'basic')
+                                    ('age_verified', 'Age Verification (18+)', TRUE, 'basic')
                                 ON CONFLICT (requirement_key) DO NOTHING;
 
                                 -- 4. Function to check if user meets all requirements

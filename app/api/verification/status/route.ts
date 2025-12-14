@@ -29,22 +29,16 @@ export async function GET(request: Request) {
 
         if (error) throw error
 
-        const check = dbCheck as { missing_requirements: string[] }
-        const missing = check.missing_requirements || []
-
-        // Add email verification check from Auth (not DB)
-        if (!user.email_confirmed_at) {
-            missing.push('email_verified')
+        const check = dbCheck as {
+            is_verified: boolean
+            verification_level: string
+            missing_requirements: string[]
         }
 
-        // Determine final status
-        const isVerified = missing.length === 0
-        const level = isVerified ? 'basic' : 'none'
-
         return NextResponse.json({
-            is_verified: isVerified,
-            verification_level: level,
-            missing_requirements: missing
+            is_verified: check.is_verified,
+            verification_level: check.verification_level,
+            missing_requirements: check.missing_requirements || []
         })
 
     } catch (error: any) {
