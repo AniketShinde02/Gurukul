@@ -53,15 +53,18 @@ export function useVerificationGate(): VerificationGateResult {
             // Show specific error based on missing requirements
             const missing = status?.missing_requirements || []
 
+            // Get current URL to return to after verification
+            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search)
+
             if (missing.includes('age_verified')) {
                 toast.error('Please verify your age to access this feature')
-                router.push('/verify?step=age')
+                router.push(`/verify?step=age&returnUrl=${returnUrl}`)
             } else if (missing.includes('email_verified')) {
                 toast.error('Please verify your email to access this feature')
-                router.push('/verify?step=email')
+                router.push(`/verify?step=email&returnUrl=${returnUrl}`)
             } else {
                 toast.error('Please complete verification to access this feature')
-                router.push('/verify')
+                router.push(`/verify?returnUrl=${returnUrl}`)
             }
 
             return false

@@ -224,7 +224,7 @@ function VoiceVideoSettings() {
                                 ref={videoRef}
                                 autoPlay
                                 muted
-                                className="w-full rounded-lg bg-black"
+                                className="w-full rounded-lg bg-black transform scale-x-[-1]"
                             />
                         )}
                     </div>

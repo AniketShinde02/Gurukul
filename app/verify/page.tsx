@@ -16,10 +16,11 @@ function VerifyContent() {
     const [currentStep, setCurrentStep] = useState<string | null>(null)
 
     useEffect(() => {
-        // If already verified, redirect to sangha
+        // If already verified, redirect to return URL or sangha
         if (!isLoading && isVerified) {
             toast.success('Verification complete!')
-            router.push('/sangha')
+            const returnUrl = searchParams.get('returnUrl')
+            router.push(returnUrl ? decodeURIComponent(returnUrl) : '/sangha')
             return
         }
 
@@ -41,10 +42,11 @@ function VerifyContent() {
         setShowAgeModal(false)
         toast.success('Age verified!')
 
-        // Check if all requirements are met
+        // Check if all requirements are met and redirect
         setTimeout(() => {
             if (isVerified) {
-                router.push('/sangha')
+                const returnUrl = searchParams.get('returnUrl')
+                router.push(returnUrl ? decodeURIComponent(returnUrl) : '/sangha')
             }
         }, 500)
     }
@@ -149,10 +151,13 @@ function VerifyContent() {
                 {isVerified && (
                     <div className="mt-8 text-center">
                         <button
-                            onClick={() => router.push('/sangha')}
+                            onClick={() => {
+                                const returnUrl = searchParams.get('returnUrl')
+                                router.push(returnUrl ? decodeURIComponent(returnUrl) : '/sangha')
+                            }}
                             className="px-8 py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-medium transition-colors"
                         >
-                            Continue to Sangha
+                            Continue
                         </button>
                     </div>
                 )}

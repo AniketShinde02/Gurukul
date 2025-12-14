@@ -44,7 +44,7 @@ export function VideoGrid({ localStream, remoteStream, isVideoEnabled }: VideoGr
                         ref={remoteVideoRef}
                         autoPlay
                         playsInline
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-cover transform scale-x-[-1]"
                     />
                 ) : (
                     <div className="flex flex-col items-center gap-4 text-stone-500">

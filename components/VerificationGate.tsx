@@ -25,11 +25,15 @@ export function VerificationGate({
 
     useEffect(() => {
         if (!isLoading && !isVerified) {
-            // Redirect to verification page with missing requirements
+            // Redirect to verification page with missing requirements and return URL
             const params = new URLSearchParams()
             if (missingRequirements.length > 0) {
                 params.set('missing', missingRequirements.join(','))
             }
+            // Add current URL as return destination
+            const returnUrl = encodeURIComponent(window.location.pathname + window.location.search)
+            params.set('returnUrl', returnUrl)
+
             router.push(`${redirectTo}?${params.toString()}`)
         }
     }, [isLoading, isVerified, redirectTo, missingRequirements, router])

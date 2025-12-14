@@ -99,8 +99,7 @@ export function ParticipantGrid({ roomName }: ParticipantGridProps) {
                                             trackRef.publication.track.attach(el)
                                         }
                                     }}
-                                    className="w-full h-full object-cover"
-                                    style={isLocal ? { transform: 'scaleX(-1)' } : undefined}
+                                    className="w-full h-full object-cover transform scale-x-[-1]"
                                     autoPlay
                                     playsInline
                                     muted={isLocal}
