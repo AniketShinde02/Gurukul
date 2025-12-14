@@ -148,7 +148,133 @@ We believe in using the absolute best tools for the job.
 
 ---
 
+## 🛡️ Safety & Verification System (Dec 14, 2025) - V2.0 SECURITY UPDATE 🔒
+
+### Complete Safety Infrastructure
+**Production-ready safety system ensuring platform security and legal compliance.**
+
+#### 🔞 Age Verification
+**Legal requirement for video chat platforms - 18+ only**
+
+| Feature | Implementation | Status |
+|---------|----------------|--------|
+| **DOB Input** | 3-field date picker (Day/Month/Year) | ✅ Live |
+| **Server Validation** | Age calculation + 18+ check | ✅ Live |
+| **Compliance Logging** | GDPR/COPPA audit trail | ✅ Live |
+| **Auto-Verification** | Trigger updates `is_verified` flag | ✅ Live |
+| **Access Control** | Blocks video features for under-18 | ✅ Live |
+
+**User Flow:**
+```
+User tries video matching → Age modal appears → Enter DOB → 
+Server validates (18+) → age_verified = TRUE → Access granted ✅
+```
+
+#### 🚨 Report & Safety System
+**Community moderation with auto-ban**
+
+| Feature | Implementation | Status |
+|---------|----------------|--------|
+| **Report Button** | Flag icon in video controls | ✅ Live |
+| **6 Report Reasons** | Harassment, spam, nudity, violence, etc. | ✅ Live |
+| **Auto-Ban** | 3 reports in 7 days = 7-day ban | ✅ Live |
+| **Ban Management** | Automatic expiration + appeal | ✅ Live |
+| **Audit Trail** | Complete report history | ✅ Live |
+
+**Auto-Ban Logic:**
+```
+User gets reported → Saved to database → Trigger checks count →
+3 reports in 7 days? → Auto-ban for 7 days → User redirected
+```
+
+#### ✅ Verification Gate
+**Centralized access control**
+
+| Feature | Implementation | Status |
+|---------|----------------|--------|
+| **Single Source of Truth** | `profiles.is_verified` flag | ✅ Live |
+| **Auto-Update Trigger** | Updates on age/email verification | ✅ Live |
+| **Middleware Protection** | Blocks unverified users | ✅ Live |
+| **Client Guard** | Shows verification modal | ✅ Live |
+| **Return URL Support** | Redirects back after verification | ✅ Live |
+
+**Protected Routes:**
+- `/sangha` - Requires verification
+- `/chat` - Requires verification
+
+#### 📧 Email Verification
+**All users must verify email**
+
+| User Type | Verification Method | Status |
+|-----------|---------------------|--------|
+| **OAuth (Google/GitHub)** | Auto-verified by provider | ✅ Live |
+| **Email/Password** | Confirmation link required | ✅ Live |
+
+### Safety System Architecture
+
+```
+┌─────────────────────────────────────────┐
+│    Single Source of Truth (Database)    │
+│  • profiles.is_verified                 │
+│  • profiles.age_verified                │
+│  • user.email_confirmed_at              │
+└─────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────┐
+│         Verification Functions           │
+│  • check_user_verification()            │
+│  • verify_user_age()                    │
+│  • auto_ban_user()                      │
+└─────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────┐
+│            API Endpoints                 │
+│  • /api/verify-age                      │
+│  • /api/verification/status             │
+│  • /api/reports                         │
+└─────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────┐
+│         Protected Features               │
+│  • Video Matching (Sangha)              │
+│  • Study Sessions (Chat)                │
+└─────────────────────────────────────────┘
+```
+
+### Database Schema
+
+**New Tables:**
+- `age_verification_logs` - Compliance audit trail
+- `user_reports` - Report tracking
+- `user_bans` - Ban management
+- `verification_requirements` - Config-driven requirements
+
+**New Columns:**
+- `profiles.date_of_birth` - User's DOB
+- `profiles.age_verified` - 18+ verification flag
+- `profiles.is_verified` - Overall verification status
+- `profiles.verification_level` - 'none', 'basic', 'full'
+
+### Security Features
+
+| Feature | Implementation | Benefit |
+|---------|----------------|---------|
+| **Server-Side Validation** | All checks on server | Cannot be bypassed |
+| **SECURITY DEFINER** | Trigger bypasses RLS | Logs work correctly |
+| **Audit Trail** | Every verification logged | GDPR/COPPA compliant |
+| **Auto-Update Triggers** | Maintains consistency | Single source of truth |
+| **RLS Policies** | Row-level security | Data protection |
+
+### Documentation
+
+- **Complete Guide:** See `SAFETY_SYSTEM_GUIDE.md` for detailed documentation
+- **Changelog:** See `CHANGELOG.md` for implementation details
+- **SQL Migrations:** See `scripts/add-*.sql` for database setup
+
+---
+
 ## 🚀 Latest Updates (Dec 13, 2025) - V1 FEATURE COMPLETE 🎉
+
 
 ### 📌 Message Pinning
 Pin important messages in DMs and Study Rooms for quick access.
