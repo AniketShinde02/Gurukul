@@ -421,6 +421,9 @@ export default function ChatPage() {
                                     onToggleMic={toggleMic}
                                     onToggleCamera={toggleCamera}
                                     onEndCall={handleEndChat}
+                                    partnerId={partnerId || undefined}
+                                    partnerUsername={partnerId || undefined} // TODO: Get actual username
+                                    sessionId={sessionId || undefined}
                                 />
                             </div>
                         </div>
