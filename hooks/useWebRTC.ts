@@ -3,10 +3,19 @@ import { supabase } from '@/lib/supabase/client'
 import { toast } from 'react-hot-toast'
 import type { Message } from '@/types/chat.types'
 
-const RTC_CONFIG = {
+const RTC_CONFIG: RTCConfiguration = {
     iceServers: [
+        // STUN servers (for NAT traversal)
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
+        { urls: 'stun:stun1.l.google.com:19302' },
+        // TURN server (for users behind strict firewalls)
+        ...(process.env.NEXT_PUBLIC_TURN_USERNAME && process.env.NEXT_PUBLIC_TURN_CREDENTIAL
+            ? [{
+                urls: process.env.NEXT_PUBLIC_TURN_URL || 'turn:relay.metered.ca:443',
+                username: process.env.NEXT_PUBLIC_TURN_USERNAME,
+                credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
+            }]
+            : [])
     ]
 }
 

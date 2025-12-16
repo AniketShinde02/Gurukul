@@ -45,3 +45,6 @@ next-env.d.ts
 
 # Supabase
 supabase/functions/*/deno.lock
+
+# Sentry Config File
+.env.sentry-build-plugin
