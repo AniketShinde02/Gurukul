@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { rateLimit } from '@/lib/redis'
 
 export async function POST(request: Request) {
     try {
@@ -26,6 +27,15 @@ export async function POST(request: Request) {
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        // Rate limiting: 3 reports per minute
+        const { allowed, remaining } = await rateLimit(user.id, 'reports', 3, 60)
+        if (!allowed) {
+            return NextResponse.json(
+                { error: 'Too many reports. Please wait before reporting again.' },
+                { status: 429 }
+            )
         }
 
         const { reported_id, session_id, reason, description } = await request.json()
