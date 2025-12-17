@@ -1,9 +1,5 @@
 'use client'
 
-// Force dynamic rendering to prevent cache issues
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
-
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { User, Mail, Camera, Save, Loader2, MapPin, Link as LinkIcon, GraduationCap, Heart, X, Upload, ImageIcon, LayoutGrid, Clock, Award, BookOpen, Target } from 'lucide-react'
