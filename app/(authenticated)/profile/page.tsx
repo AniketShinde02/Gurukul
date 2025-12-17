@@ -1,8 +1,12 @@
 'use client'
 
+// Force dynamic rendering to prevent cache issues
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { User, Mail, Camera, Save, Loader2, MapPin, Link as LinkIcon, GraduationCap, Heart, X, Upload, ImageIcon, LayoutGrid, Clock, Award, BookOpen } from 'lucide-react'
+import { User, Mail, Camera, Save, Loader2, MapPin, Link as LinkIcon, GraduationCap, Heart, X, Upload, ImageIcon, LayoutGrid, Clock, Award, BookOpen, Target } from 'lucide-react'
 import { toast } from 'react-hot-toast'
 import type { Profile } from '@/types/chat.types'
 import Cropper from 'react-easy-crop'
@@ -91,6 +95,7 @@ export default function ProfilePage() {
         bio: '',
         location: '',
         website: '',
+        session: '', // NEW: e.g., "JEE 2025", "NEET 2024"
         education: [] as Education[],
         interests: [] as string[]
     })
@@ -130,6 +135,7 @@ export default function ProfilePage() {
                 bio: data.bio || '',
                 location: data.location || '',
                 website: data.website || '',
+                session: data.session || '',
                 education: data.education || [],
                 interests: data.interests || []
             })
@@ -155,6 +161,7 @@ export default function ProfilePage() {
                     bio: formData.bio,
                     location: formData.location,
                     website: formData.website,
+                    session: formData.session,
                     education: formData.education,
                     interests: formData.interests
                 })
@@ -503,6 +510,21 @@ export default function ProfilePage() {
                                             />
                                         </div>
                                     </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-stone-500 uppercase tracking-wider ml-1">Session / Goal</label>
+                                    <div className="relative">
+                                        <Target className="absolute left-4 top-3.5 w-4 h-4 text-stone-500" />
+                                        <input
+                                            type="text"
+                                            value={formData.session}
+                                            onChange={(e) => setFormData({ ...formData, session: e.target.value })}
+                                            className="w-full bg-[#2C2927] border border-white/5 rounded-xl pl-10 pr-4 py-3 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 focus:outline-none transition-all text-sm"
+                                            placeholder="e.g., JEE 2025, NEET 2024, UPSC 2023"
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-stone-600 ml-1">What are you currently preparing for?</p>
                                 </div>
                             </form>
                         )}

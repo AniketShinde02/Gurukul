@@ -1,9 +1,27 @@
+/**
+ * DEPRECATED AGE VERIFICATION API
+ * 
+ * This API route is DEPRECATED and kept only for backward compatibility.
+ * 
+ * NEW APPROACH:
+ * - Age is now collected during profile completion (ProfileCompletionModal)
+ * - Age verification is handled by centralized utility: lib/ageVerification.ts
+ * - All age checks should use getAgeVerificationStatus() from the utility
+ * 
+ * DO NOT USE THIS API FOR NEW FEATURES.
+ * 
+ * @deprecated Use profile completion flow and lib/ageVerification.ts instead
+ */
+
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { rateLimit } from '@/lib/redis'
+import { getAgeVerificationStatus, calculateAge } from '@/lib/ageVerification'
 
 export async function POST(request: Request) {
+    console.warn('DEPRECATED: /api/verify-age POST is deprecated. Use profile completion flow instead.')
+
     try {
         const cookieStore = await cookies()
         const supabase = createServerClient(
@@ -65,11 +83,13 @@ export async function POST(request: Request) {
             )
         }
 
-        // Check if user is at least 13 (minimum age for most platforms)
-        const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000))
-        if (age < 13) {
+        // Use centralized age verification
+        const ageStatus = getAgeVerificationStatus(date_of_birth)
+
+        // Check platform access (16+ required)
+        if (!ageStatus.canAccessPlatform) {
             return NextResponse.json(
-                { error: 'You must be at least 13 years old to use this platform' },
+                { error: ageStatus.restrictionMessage },
                 { status: 400 }
             )
         }
@@ -77,36 +97,38 @@ export async function POST(request: Request) {
         // Check if already verified
         const { data: profile } = await supabase
             .from('profiles')
-            .select('age_verified')
+            .select('age_verified, date_of_birth')
             .eq('id', user.id)
             .single()
 
-        if (profile?.age_verified) {
+        if (profile?.age_verified && profile?.date_of_birth) {
             return NextResponse.json(
                 { error: 'Age already verified' },
                 { status: 400 }
             )
         }
 
-        // Verify age using database function
-        const { data, error } = await supabase
-            .rpc('verify_user_age', {
-                user_id_param: user.id,
-                dob: date_of_birth
+        // Update profile with DOB and age verification status
+        const { error: updateError } = await supabase
+            .from('profiles')
+            .update({
+                date_of_birth: date_of_birth,
+                age_verified: ageStatus.age >= 18,
+                age_verified_at: new Date().toISOString(),
             })
+            .eq('id', user.id)
 
-        if (error) throw error
-
-        const isAdult = data as boolean
-        const calculatedAge = age
+        if (updateError) throw updateError
 
         return NextResponse.json({
             success: true,
-            verified: isAdult,
-            age: calculatedAge,
-            message: isAdult
-                ? 'Age verified successfully'
-                : 'You must be 18+ to access video matching'
+            verified: ageStatus.canAccessVideoMatch,
+            age: ageStatus.age,
+            canAccessVideoMatch: ageStatus.canAccessVideoMatch,
+            canAccessAllCommunities: ageStatus.canAccessAllCommunities,
+            message: ageStatus.canAccessVideoMatch
+                ? 'Age verified successfully - full access granted'
+                : ageStatus.restrictionMessage || 'Limited access - some features restricted'
         })
 
     } catch (error: any) {
@@ -148,19 +170,19 @@ export async function GET(request: Request) {
 
         if (error) throw error
 
-        // Calculate age if DOB exists
-        let age = null
-        if (profile.date_of_birth) {
-            const dob = new Date(profile.date_of_birth)
-            age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000))
-        }
+        // Use centralized age verification
+        const ageStatus = getAgeVerificationStatus(profile.date_of_birth)
 
         return NextResponse.json({
             age_verified: profile.age_verified || false,
             has_dob: !!profile.date_of_birth,
-            age: age,
+            age: ageStatus.age,
             verified_at: profile.age_verified_at,
-            is_adult: age !== null && age >= 18
+            is_adult: ageStatus.age >= 18,
+            canAccessPlatform: ageStatus.canAccessPlatform,
+            canAccessVideoMatch: ageStatus.canAccessVideoMatch,
+            canAccessAllCommunities: ageStatus.canAccessAllCommunities,
+            restrictionMessage: ageStatus.restrictionMessage,
         })
 
     } catch (error: any) {

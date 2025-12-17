@@ -1,18 +1,16 @@
 'use client'
 
-import { LayoutDashboard, Users, Compass, BookOpen, Settings, UsersRound, Trophy } from 'lucide-react'
+import { LayoutDashboard, Users, Compass, BookOpen, Settings, UsersRound, Trophy, HelpCircle, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 const navItems = [
-    { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
-    { label: 'Study Match', icon: Users, href: '/chat' },
-    { label: 'Explore Servers', icon: Compass, href: '/rooms' },
-    { label: 'Sangha', icon: UsersRound, href: '/sangha' },
-    { label: 'Leaderboard', icon: Trophy, href: '/leaderboard' },
-    { label: 'Resources', icon: BookOpen, href: '/resources' },
-    { label: 'Settings', icon: Settings, href: '/settings' },
+    { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard', dataTour: 'dashboard' },
+    { label: 'Study Match', icon: Users, href: '/chat', dataTour: 'study-match' },
+    { label: 'Messages', icon: MessageCircle, href: '/messages', dataTour: 'messages' },
+    { label: 'Sangha', icon: UsersRound, href: '/sangha', dataTour: 'sangha' },
+    { label: 'Help', icon: HelpCircle, href: '/help', dataTour: 'help' },
 ]
 
 export function Navigation() {
@@ -30,19 +28,11 @@ export function Navigation() {
                                 <TooltipTrigger asChild>
                                     <Link
                                         href={item.href}
+                                        data-tour={item.dataTour}
                                         onClick={() => {
                                             if (item.href === '/sangha') {
-                                                // Force a full navigation or state reset if needed
-                                                // Since we are using Link, it navigates. 
-                                                // But if we are already on /sangha, we might want to reset the view.
-                                                // We can dispatch a custom event or use a global store if needed.
-                                                // For now, let's rely on the fact that navigating to the same URL might not unmount.
-                                                // A simple hack is to force a window location change if already on sangha, 
-                                                // OR better, let the SanghaPage handle the reset via a query param or just re-mounting.
-                                                // Actually, the user wants "back" functionality. 
-                                                // If we are on /sangha, clicking this should probably reset the view to 'friends'.
                                                 if (window.location.pathname === '/sangha') {
-                                                    window.location.reload() // Simple and effective for "refreshing" the view as requested
+                                                    window.location.reload()
                                                 }
                                             }
                                         }}
@@ -71,6 +61,7 @@ export function Navigation() {
                         <Link
                             key={item.href}
                             href={item.href}
+                            data-tour={item.dataTour}
                             className={`flex flex-col items-center justify-center w-12 h-12 rounded-full transition-all ${isActive ? 'text-orange-500' : 'text-stone-500 hover:text-stone-300'
                                 }`}
                         >

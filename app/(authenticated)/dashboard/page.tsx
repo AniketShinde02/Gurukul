@@ -6,13 +6,13 @@ import { Clock, Users, BookOpen, Network, ArrowUpRight, Play, Search, Loader2, S
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { BuddyList } from '@/components/dm/BuddyList'
+import { toast } from 'react-hot-toast'
 
 export default function DashboardPage() {
     const [loading, setLoading] = useState(true)
     const [stats, setStats] = useState({
         studyHours: 0,
         activeGroups: 0,
-        resources: 0,
         connections: 0
     })
     const [activeRooms, setActiveRooms] = useState<any[]>([])
@@ -91,7 +91,6 @@ export default function DashboardPage() {
             setStats({
                 studyHours: Math.round(totalSeconds / 3600 * 10) / 10, // Convert to hours with 1 decimal
                 activeGroups: roomCount || 0,
-                resources: 12, // Placeholder until resources table exists
                 connections: uniquePeers.size
             })
 
@@ -143,11 +142,10 @@ export default function DashboardPage() {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 {[
                     { label: 'Study Hours', value: stats.studyHours.toString(), icon: Clock, trend: 'Total' },
                     { label: 'Active Rooms', value: stats.activeGroups.toString(), icon: Users, trend: 'Live' },
-                    { label: 'Resources', value: stats.resources.toString(), icon: BookOpen, trend: 'Shared' },
                     { label: 'Connections', value: stats.connections.toString(), icon: Network, trend: 'Peers' },
                 ].map((stat, i) => (
                     <div key={i} className="bg-black/40 border border-white/5 rounded-2xl p-4 backdrop-blur-md hover:border-orange-500/20 transition-colors group">
@@ -202,7 +200,13 @@ export default function DashboardPage() {
                     </Link>
                 )}
 
-                <div className="bg-black/40 border border-white/5 rounded-2xl p-6 flex flex-col justify-between hover:border-orange-500/30 transition-all group h-48 relative overflow-hidden cursor-not-allowed opacity-70">
+                <div
+                    onClick={() => toast('🚧 Resources feature coming soon!', {
+                        icon: '⚠️',
+                        duration: 2000
+                    })}
+                    className="bg-black/40 border border-white/5 rounded-2xl p-6 flex flex-col justify-between hover:border-orange-500/30 transition-all group h-48 relative overflow-hidden cursor-pointer opacity-70"
+                >
                     <div className="absolute inset-0 bg-purple-500/5 group-hover:bg-purple-500/10 transition-colors" />
                     <div className="relative z-10">
                         <div className="w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white mb-4 shadow-lg shadow-purple-900/30">

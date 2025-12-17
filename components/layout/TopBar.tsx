@@ -92,7 +92,7 @@ export function TopBar() {
 
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-orange-500 to-purple-500 p-[2px] cursor-pointer hover:scale-105 transition-transform">
+                        <div data-tour="profile" className="w-9 h-9 rounded-full bg-gradient-to-tr from-orange-500 to-purple-500 p-[2px] cursor-pointer hover:scale-105 transition-transform">
                             <div className="w-full h-full rounded-full bg-stone-900 flex items-center justify-center overflow-hidden relative">
                                 {avatarUrl ? (
                                     <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
