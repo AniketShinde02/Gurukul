@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { toast } from 'react-hot-toast'
 
 interface VerificationStatus {
@@ -7,31 +7,48 @@ interface VerificationStatus {
 }
 
 /**
- * Lightweight verification hook - No heavy wrappers!
- * Just checks and shows toast if needed
+ * Lightweight verification hook with smart caching
+ * Prevents redundant API calls while ensuring fresh data when needed
  */
 export function useVerificationCheck() {
     const [status, setStatus] = useState<VerificationStatus | null>(null)
     const [isLoading, setIsLoading] = useState(true)
+    const [lastCheckTime, setLastCheckTime] = useState<number>(0)
 
-    useEffect(() => {
-        checkVerification()
-    }, [])
+    const checkVerification = useCallback(async (forceRefresh = false) => {
+        // Smart caching: Don't recheck if checked within last 5 seconds (unless forced)
+        const now = Date.now()
+        if (!forceRefresh && lastCheckTime && (now - lastCheckTime) < 5000) {
+            setIsLoading(false)
+            return status
+        }
 
-    const checkVerification = async () => {
         try {
-            const response = await fetch('/api/verification/status')
+            setIsLoading(true)
+            const response = await fetch('/api/verification/status', {
+                cache: 'no-store', // Always get fresh data
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
+            })
             const data = await response.json()
 
             if (response.ok) {
                 setStatus(data)
+                setLastCheckTime(now)
+                return data
             }
         } catch (error) {
             console.error('Verification check error:', error)
         } finally {
             setIsLoading(false)
         }
-    }
+        return null
+    }, [lastCheckTime, status])
+
+    useEffect(() => {
+        checkVerification()
+    }, []) // Only run on mount
 
     /**
      * Check before allowing action - Shows toast if not verified
@@ -64,6 +81,6 @@ export function useVerificationCheck() {
         isLoading,
         missingRequirements: status?.missing_requirements || [],
         checkBeforeAction,
-        recheckVerification: checkVerification
+        recheckVerification: () => checkVerification(true) // Force refresh
     }
 }

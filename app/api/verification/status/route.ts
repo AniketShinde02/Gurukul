@@ -10,8 +10,17 @@ export async function GET(request: Request) {
             process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
             {
                 cookies: {
-                    get(name: string) {
-                        return cookieStore.get(name)?.value
+                    getAll() {
+                        return cookieStore.getAll()
+                    },
+                    setAll(cookiesToSet) {
+                        try {
+                            cookiesToSet.forEach(({ name, value, options }) =>
+                                cookieStore.set(name, value, options)
+                            )
+                        } catch {
+                            // Server Component - middleware will handle
+                        }
                     },
                 },
             }
@@ -22,24 +31,26 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        // Call verification check function
-        const { data: dbCheck, error } = await supabase
-            .rpc('check_user_verification', { user_id_param: user.id })
+        // Get fresh profile data directly
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('age_verified, is_verified, verification_level')
+            .eq('id', user.id)
             .single()
 
-        if (error) throw error
-
-        const check = dbCheck as {
-            is_verified: boolean
-            verification_level: string
-            missing_requirements: string[]
+        if (profileError) {
+            console.error('Profile fetch error:', profileError)
+            throw profileError
         }
 
-        const missing = [...(check.missing_requirements || [])]
+        const missing: string[] = []
 
-        // Check email verification for ALL users (OAuth + Email/Password)
-        // OAuth users have email_confirmed_at set automatically by provider
-        // Email/Password users need to verify via email link
+        // Check age verification from profile
+        if (!profile?.age_verified) {
+            missing.push('age_verified')
+        }
+
+        // Check email verification from auth.users
         const isEmailVerified = user.email_confirmed_at !== null && user.email_confirmed_at !== undefined
 
         if (!isEmailVerified) {

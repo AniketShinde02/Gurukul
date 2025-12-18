@@ -31,31 +31,41 @@ export function VerificationGuard({ children }: VerificationGuardProps) {
 
         setHasChecked(true)
 
-        if (!isVerified) {
-            const missing = missingRequirements
+        // Small delay to allow any pending verification updates to complete
+        const checkTimer = setTimeout(() => {
+            if (!isVerified) {
+                const missing = missingRequirements
 
-            if (missing.includes('age_verified')) {
-                // Show age verification modal
-                setShowAgeModal(true)
-                toast.error('Please verify your age (18+) to access this feature', {
-                    duration: 5000,
-                    icon: '🔞'
-                })
-            } else if (missing.includes('email_verified')) {
-                toast.error('Please verify your email to access this feature', {
-                    duration: 5000,
-                    icon: '📧'
-                })
-                // Redirect to home after 2 seconds
-                setTimeout(() => router.push('/'), 2000)
-            } else {
-                toast.error('Please complete verification to access this feature', {
-                    duration: 5000
-                })
-                setTimeout(() => router.push('/'), 2000)
+                if (missing.includes('age_verified')) {
+                    // Show age verification modal
+                    setShowAgeModal(true)
+                    toast.error('Please verify your age (18+) to access this feature', {
+                        duration: 5000,
+                        icon: '🔞'
+                    })
+                } else if (missing.includes('email_verified')) {
+                    toast.error('Please verify your email to access this feature', {
+                        duration: 5000,
+                        icon: '📧'
+                    })
+                    // Redirect to home after 2 seconds
+                    setTimeout(() => router.push('/'), 2000)
+                } else {
+                    toast.error('Please complete verification to access this feature', {
+                        duration: 5000
+                    })
+                    setTimeout(() => router.push('/'), 2000)
+                }
             }
-        }
-    }, [isLoading, isVerified, isProtectedRoute, missingRequirements, hasChecked, router, pathname])
+        }, 300) // 300ms delay
+
+        return () => clearTimeout(checkTimer)
+    }, [isLoading, isVerified, isProtectedRoute, missingRequirements, hasChecked, router])
+
+    // Reset hasChecked when pathname changes
+    useEffect(() => {
+        setHasChecked(false)
+    }, [pathname])
 
     const handleAgeVerified = async () => {
         await recheckVerification()

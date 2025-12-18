@@ -127,7 +127,22 @@ export default function ProfileCompletionModal({ isOpen, onComplete }: ProfileCo
 
             if (error) throw error
 
-            toast.success('Profile completed! 🎉')
+            // Wait for database trigger to update verification status (100ms should be enough)
+            await new Promise(resolve => setTimeout(resolve, 150))
+
+            // Force verification recheck to update UI immediately
+            // This prevents the verification popup from showing again
+            const verificationCheck = await fetch('/api/verification/status', {
+                cache: 'no-store'
+            })
+            const verificationStatus = await verificationCheck.json()
+
+            if (verificationStatus.is_verified) {
+                toast.success('Profile completed! All verified ✅', { duration: 3000 })
+            } else {
+                toast.success('Profile completed! 🎉', { duration: 3000 })
+            }
+
             onComplete()
         } catch (error: any) {
             console.error('Error completing profile:', error)
@@ -378,7 +393,26 @@ export default function ProfileCompletionModal({ isOpen, onComplete }: ProfileCo
                                             className="mt-1 w-4 h-4 rounded border-blue-500/50 bg-blue-500/10 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
                                         />
                                         <span className="text-sm text-stone-300">
-                                            I agree to the <span className="text-blue-500 hover:underline">Terms of Service</span> and <span className="text-blue-500 hover:underline">Privacy Policy</span>
+                                            I agree to the{' '}
+                                            <a
+                                                href="/terms"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-blue-500 hover:underline font-medium"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                Terms of Service
+                                            </a>
+                                            {' '}and{' '}
+                                            <a
+                                                href="/privacy"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-blue-500 hover:underline font-medium"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                Privacy Policy
+                                            </a>
                                         </span>
                                     </label>
                                 </div>
