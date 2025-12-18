@@ -1,3 +1,5 @@
+const { withSentryConfig } = require("@sentry/nextjs");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: {
@@ -21,20 +23,16 @@ const nextConfig = {
       '@radix-ui/react-scroll-area',
       '@radix-ui/react-tooltip',
     ],
+    mdxRs: true, // Use Rust-based MDX compiler
   },
+  // Enable MDX support
+  pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
 }
 
-const withNextra = require('nextra')({
-  theme: 'nextra-theme-docs',
-  themeConfig: './theme.config.tsx',
-})
-
-const { withSentryConfig } = require("@sentry/nextjs");
-
-module.exports = withNextra(withSentryConfig(nextConfig, {
+module.exports = withSentryConfig(nextConfig, {
   org: "gurukul-rv",
   project: "javascript-nextjs",
   silent: !process.env.CI,
   widenClientFileUpload: true,
   automaticVercelMonitors: true,
-}));
+});
