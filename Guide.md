@@ -3990,3 +3990,199 @@ const { data: profile } = await supabase
 
 ---
 
+
+## 22. Documentation System Implementation (2025-12-18) - Nextra Docs Setup
+
+### Session Overview
+This session focused on creating a comprehensive documentation system for Gurukul using MDX and custom layouts.
+
+---
+
+### 1. Documentation System Architecture
+
+#### Initial Approach: Nextra v4
+**Attempted:** Integration with Nextra theme for automatic sidebar and navigation
+**Issue:** Nextra v4 plugin had compatibility issues with Next.js 16 App Router
+**Resolution:** Built custom documentation system using native Next.js MDX support
+
+#### Final Implementation: Custom MDX System
+
+**Dependencies Installed:**
+- @next/mdx - Native MDX support for Next.js
+- @mdx-js/loader - MDX compilation
+- @mdx-js/react - React MDX runtime
+- @tailwindcss/typography - Beautiful prose styling
+
+**Files Created:**
+1. 
+ext.config.js - Added MDX plugin configuration
+2. mdx-components.tsx - Root MDX components configuration
+3. 	ailwind.config.js - Added typography plugin
+4. pp/docs/layout.tsx - Custom docs layout with sidebar
+5. pp/docs/page.tsx - Documentation index page
+
+---
+
+### 2. Documentation Structure
+
+**Created 14 Documentation Pages:**
+
+**Root Level:**
+- pp/docs/index.mdx - Introduction to Gurukul
+- pp/docs/getting-started.mdx - Setup guide
+- pp/docs/architecture.mdx - Technical architecture
+- pp/docs/contribution.mdx - Contribution guidelines
+- pp/docs/changelog.mdx - Version history
+
+**Core Concepts (5 pages):**
+- matchmaking.mdx - Atomic matchmaking system
+- sangha.mdx - Community system
+- safety.mdx - Safety & verification
+- design.mdx - Vedic design philosophy
+- ans.mdx - Banning & appeals process
+
+**Guides (2 pages):**
+- create-sangha.mdx - Step-by-step Sangha creation
+- ind-buddies.mdx - Matchmaking guide
+
+**Reference (2 pages):**
+- env-vars.mdx - Environment variables
+- pi.mdx - API endpoints
+
+---
+
+### 3. Custom Layout Implementation
+
+**Features:**
+- Stone & Saffron theme matching main site
+- Sticky sidebar with all documentation links
+- Responsive layout
+- Tailwind Typography for beautiful markdown rendering
+- Custom header with Flame logo
+- "Back to Home" link
+
+**Code Structure:**
+`	ypescript
+// Each MDX file has a corresponding page.tsx wrapper
+// Example: app/docs/getting-started/page.tsx
+import Content from '../getting-started.mdx'
+export default function Page() {
+  return <Content />
+}
+`
+
+---
+
+### 4. Integration with Main Site
+
+**Footer Update:**
+- Added "Documentation" link in landing page footer
+- Updated all support emails to Ai.Captioncraft@outlook.com
+
+**Accessibility:**
+- Documentation accessible at /docs
+- All sidebar links functional
+- No 404 errors
+
+---
+
+### 5. Technical Decisions
+
+**Why Not Nextra:**
+- Nextra v4 plugin incompatible with Next.js 16
+- equire('nextra') returned non-function
+- Custom solution provides more control
+
+**Why Custom Layout:**
+- Full control over styling
+- Matches existing Gurukul theme perfectly
+- No dependency on external theme packages
+- Easier to maintain and customize
+
+**Why Tailwind Typography:**
+- Beautiful out-of-the-box markdown styling
+- prose-invert for dark mode
+- prose-orange for brand consistency
+
+---
+
+### 6. Files Modified
+
+**Configuration:**
+- 
+ext.config.js - Added withMDX wrapper
+- 	ailwind.config.js - Added typography plugin
+- pp/page.tsx - Added docs link in footer
+
+**New Files (20+):**
+- 14 MDX documentation files
+- 14 page.tsx wrappers
+- 1 custom layout
+- 1 mdx-components.tsx
+
+---
+
+### 7. Documentation Content Strategy
+
+**Principles:**
+- No fake information - only document what exists
+- Task-oriented - focus on "how to" not "what is"
+- Concise - avoid fluff and repetition
+- Honest - "Beta Launch" instead of fake user counts
+
+**Content Verification:**
+All documented features verified in codebase:
+-  Sentry setup files exist
+-  Admin dashboard implemented
+-  Typing indicators hook exists
+-  Read receipts hook exists
+-  CSRF protection implemented
+-  File upload utilities exist
+
+---
+
+### 8. Archive Cleanup
+
+**Problem:** 155+ markdown files with 80% duplication
+
+**Solution:** Moved redundant files to /archive folder
+
+**Files Archived:**
+- All *COMPLETE*.md files (25+)
+- All *SUMMARY*.md files (15+)
+- All *FIX*.md files (20+)
+- All *REPORT*.md files (10+)
+- Old implementation plans and status files
+
+**Result:** Clean project root, all old docs preserved as proof
+
+---
+
+### Performance Impact
+
+**Before:**
+- No documentation system
+- 155+ scattered markdown files
+- High confusion, low discoverability
+
+**After:**
+- Professional /docs route
+- 14 organized documentation pages
+- Clean project structure
+- Easy to maintain and update
+
+---
+
+### Deployment Notes
+
+**Environment Variables:** None required  
+**Database Migrations:** None required  
+**Breaking Changes:** None  
+
+**Manual Steps:**
+1. Ensure @next/mdx and @tailwindcss/typography are installed
+2. Restart dev server to pick up MDX changes
+3. Visit /docs to view documentation
+
+---
+

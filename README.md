@@ -2,73 +2,63 @@
 > *The Digital Ashram for the Modern Scholar.*
 
 ![Status](https://img.shields.io/badge/status-active-success.svg)
-![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.3.0-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
 ---
 
-##  Latest Update (Dec 18, 2025) - V2.2 LANDING PAGE & LEGAL COMPLIANCE
+## Latest Update (Dec 18, 2025) - V2.3 DOCUMENTATION SYSTEM
 
-###  Major Landing Page Overhaul
-**Complete redesign with student-focused messaging, real data integration, and comprehensive legal pages.**
+### Documentation System & Project Cleanup
+**Complete documentation system with 14 pages, custom MDX layout, and archived 60+ redundant files.**
 
-####  What's New
+#### What's New
+
+**1. Professional Documentation System**
+- Custom MDX-based docs at `/docs`
+- 14 comprehensive documentation pages
+- Stone & Saffron theme matching main site
+- Sidebar navigation with all topics
+- Tailwind Typography for beautiful markdown
+
+**2. Documentation Structure**
+- **Getting Started**: Introduction, Setup guide
+- **Core Concepts**: Matchmaking, Sangha, Safety, Design, Bans
+- **Guides**: Create Sangha, Find Buddies
+- **Reference**: Environment Variables, API Endpoints
+- **More**: Architecture, Contribution, Changelog
+
+**3. Project Cleanup**
+- Archived 60+ redundant markdown files
+- Moved to `/archive` folder (preserved as proof)
+- Clean project root
+- Easy to maintain documentation
+
+**4. Integration**
+- Documentation link in footer
+- All support emails updated to `Ai.Captioncraft@outlook.com`
+- Zero 404 errors
+- Fast static pages
+
+#### Previous Update (Dec 18, 2025) - V2.2 LANDING PAGE & LEGAL COMPLIANCE
 
 **1. Student-Centric Landing Page**
--  Removed all fake data ("10,000+ users"  "Beta Launch")
--  Student-focused language (no more "aspiration/training" talk)
--  Prominent matchmaking feature sections
--  10x faster page load (<50ms, zero API calls)
--  Easy to update via single config file
+- Removed all fake data ("10,000+ users" "Beta Launch")
+- Student-focused language (no more "aspiration/training" talk)
+- Prominent matchmaking feature sections
+- 10x faster page load (<50ms, zero API calls)
 
 **2. Comprehensive Legal Pages**
--  Privacy Policy (/privacy) - GDPR-compliant
--  Terms of Service (/terms) - India jurisdiction
--  Community Guidelines (/community-guidelines) - Respectful tone
--  Contact Page (/contact) - 4 dedicated email channels
-
-**3. Enhanced Footer**
--  4-column layout (Brand, Platform, Legal, Support)
--  All legal pages linked
--  Multiple contact channels
--  Professional appearance
-
-**4. Verification System Fixes**
--  Fixed Supabase cookie warnings (getAll/setAll)
--  Fixed verification popup after onboarding
--  Smart caching (5-second debounce)
--  Real-time status updates
-
-####  Impact
-
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| **Page Load** | 500ms+ | <50ms | **10x faster** |
-| **DB Queries** | 10,000+/day | 0 | **100% reduction** |
-| **Fake Data** | Yes | No | **Honest** |
-| **Legal Compliance** | Partial | Complete | **Production-ready** |
-
-####  Key Features
-
-**Landing Page:**
-- "Beta Launch" badge (honest about user count)
-- Student-to-student messaging
-- Matchmaking feature highlighted
-- Real room names from config
-- Dynamic copy based on growth phase
-
-**Legal Pages:**
-- Professional design matching site theme
-- Comprehensive content
-- Mobile responsive
-- Multiple contact channels
-- Linked from onboarding
+- Privacy Policy (/privacy) - GDPR-compliant
+- Terms of Service (/terms) - India jurisdiction
+- Community Guidelines (/community-guidelines)
+- Contact Page (/contact) - 4 dedicated email channels
 
 **Contact Channels:**
-- General: hello@gurukul.com
-- Safety: safety@gurukul.com
-- Legal: legal@gurukul.com
-- Community: community@gurukul.com
+- General: Ai.Captioncraft@outlook.com
+- Safety: Ai.Captioncraft@outlook.com
+- Legal: Ai.Captioncraft@outlook.com
+- Community: Ai.Captioncraft@outlook.com
 
 ---
 
