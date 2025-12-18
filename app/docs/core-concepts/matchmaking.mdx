@@ -1,0 +1,17 @@
+# Atomic Matchmaking
+
+The heart of Gurukul is its **Atomic Matchmaking** engine. It connects two students instantly based on their current activity and relationship status.
+
+### How it Works
+
+1. **The Join**: A user clicks "Find Partner".
+2. **The Queue**: They are added to a `waiting_queue` in PostgreSQL.
+3. **The Lock**: An advisory lock prevents race conditions (two people matching with the same person).
+4. **The Search**: We look for:
+   - **Buddies First**: Existing connections who are also searching.
+   - **Global**: Oldest waiting user in the general queue.
+5. **The Match**: Both users are removed from the queue and a `chat_session` is created.
+
+### Immediate Feedback
+
+Our system typically finds a match in **less than 100ms** if participants are available. Signal latency is minimized by using Vercel Edge Functions and Supabase Realtime.

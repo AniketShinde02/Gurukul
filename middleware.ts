@@ -11,7 +11,8 @@ export async function middleware(req: NextRequest) {
     '/profile',
     '/sangha',
     '/settings',
-    '/rooms'
+    '/rooms',
+    '/admin'  // Admin routes require authentication
   ]
 
   // ✅ Check if current path is protected
@@ -62,5 +63,6 @@ export const config = {
     '/sangha/:path*',
     '/settings/:path*',
     '/rooms/:path*',
+    '/admin/:path*',  // Protect all admin routes
   ],
 }

@@ -1,0 +1,55 @@
+import { Steps } from 'nextra/components'
+
+# Getting Started
+
+Get up and running with Gurukul in less than 10 minutes.
+
+### Prerequisites
+
+Before you begin, ensure you have the following installed:
+- **Node.js**: v18.x or higher
+- **npm**: v9.x or higher
+- **Supabase Account**: For database and authentication
+- **LiveKit Account**: For video and audio processing
+
+### Setup Instructions
+
+<Steps>
+### Clone the Repository
+
+```bash
+git clone https://github.com/AniketShinde02/Gurukul.git
+cd Gurukul
+```
+
+### Install Dependencies
+
+```bash
+npm install
+```
+
+### Configure Environment Variables
+
+Create a `.env` file in the root directory and add your credentials:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_key
+LIVEKIT_API_KEY=your_livekit_key
+LIVEKIT_API_SECRET=your_livekit_secret
+NEXT_PUBLIC_LIVEKIT_URL=your_livekit_url
+```
+
+### Run the Development Server
+
+```bash
+npm run dev
+```
+</Steps>
+
+### First Steps in the App
+
+1. **Sign Up**: Create an account via the landing page.
+2. **Onboarding**: Complete your profile and verify your age.
+3. **Join a Room**: Enter a Study Hall to start collaborating.
+4. **Find a Buddy**: Click "Find Partner" to test the matchmaking system.

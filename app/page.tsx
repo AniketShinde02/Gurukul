@@ -594,12 +594,17 @@ export default function HomePage() {
                                     </Link>
                                 </li>
                                 <li>
-                                    <a href="mailto:safety@gurukul.com" className="hover:text-orange-500 transition-colors">
+                                    <Link href="/docs" className="hover:text-orange-500 transition-colors font-medium">
+                                        Documentation
+                                    </Link>
+                                </li>
+                                <li>
+                                    <a href="mailto:Ai.Captioncraft@outlook.com" className="hover:text-orange-500 transition-colors">
                                         Report Safety Issue
                                     </a>
                                 </li>
                                 <li>
-                                    <a href="mailto:hello@gurukul.com" className="hover:text-orange-500 transition-colors">
+                                    <a href="mailto:Ai.Captioncraft@outlook.com" className="hover:text-orange-500 transition-colors">
                                         General Inquiries
                                     </a>
                                 </li>

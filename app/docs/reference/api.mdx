@@ -1,0 +1,27 @@
+# API Endpoints
+
+Gurukul provides a internal REST API for matchmaking and community management.
+
+### Matchmaking
+
+#### `POST /api/matching/join`
+Adds the authenticated user to the matchmaking queue.
+- **Body**: `{ "matchMode": "buddies_first" | "global" }`
+- **Auth**: Required.
+
+#### `POST /api/matching/cancel`
+Removes the user from the matchmaking queue.
+- **Auth**: Required.
+
+### Sangha Management
+
+#### `POST /api/sangha/create`
+Creates a new study community.
+- **Body**: `{ "name": "...", "description": "...", "isPrivate": boolean }`
+- **Auth**: Required.
+
+### Verification
+
+#### `GET /api/verification/status`
+Checks the user's verification status (age, consensus).
+- **Auth**: Required.

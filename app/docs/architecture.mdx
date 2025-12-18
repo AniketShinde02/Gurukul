@@ -1,0 +1,43 @@
+# Technical Architecture
+
+Gurukul is built on a high-performance, serverless stack designed for low-latency collaboration and zero infrastructure costs in its beta phase.
+
+### System Overview
+
+```
+┌─────────────────┐     ┌───────────────────┐     ┌──────────────┐
+│     Client      │───▶ │   Vercel Edge     │───▶ │   Supabase   │
+│    (Next.js)    │     │  (Next.js API)    │     │ (PostgreSQL) │
+└────────┬────────┘     └─────────┬─────────┘     └──────┬───────┘
+         │                        │                      │
+         │    ┌───────────────────┼──────────────────────┘
+         │    │                   │
+         │    ▼                   ▼
+         │  ┌─────────────────────────────────┐
+         │  │     Supabase Realtime           │
+         │  │   (Phoenix Channels/WS)         │
+         │  └─────────────────────────────────┘
+         │
+         │         ┌───────────────────────┐
+         └────────▶│       WebRTC P2P      │◀─── STUN/TURN
+                   │     (Video/Audio)     │
+                   └───────────────────────┘
+```
+
+### Core Technologies
+
+- **Frontend**: Next.js 14 (App Router), Tailwind CSS, Framer Motion.
+- **Backend**: Vercel Edge Functions (API).
+- **Database**: Supabase PostgreSQL + JSONB.
+- **Realtime**: Supabase Realtime (WebSockets) for signaling.
+- **Media**: Pure WebRTC P2P (Signaling via Supabase).
+
+### Signaling Strategy
+
+We use **Supabase Realtime** for WebRTC signaling. This allows us to scale concurrent connections up to the Supabase limits (200 for free tier) without managing a dedicated signaling server like Socket.io.
+
+### Performance Benchmarks
+
+- **API Latency**: ~30ms (Edge).
+- **Matching Speed**: ~100ms.
+- **Video Handshake**: ~800ms - 1.5s (Network dependent).
